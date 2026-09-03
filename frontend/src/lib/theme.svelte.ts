@@ -4,24 +4,33 @@ class ThemeManager {
   constructor() {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('fit-theme');
+      // If dark is stored or no preference is stored, check or default
       if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        this.isDark = true;
-        document.documentElement.classList.add('dark');
+        this.applyTheme(true);
       } else {
-        this.isDark = false;
+        this.applyTheme(false);
+      }
+    }
+  }
+
+  applyTheme(dark: boolean) {
+    this.isDark = dark;
+    if (typeof window !== 'undefined') {
+      if (dark) {
+        document.documentElement.classList.add('dark');
+        document.body.classList.add('dark');
+      } else {
         document.documentElement.classList.remove('dark');
+        document.body.classList.remove('dark');
       }
     }
   }
 
   toggle() {
-    this.isDark = !this.isDark;
-    if (this.isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('fit-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('fit-theme', 'light');
+    const nextState = !this.isDark;
+    this.applyTheme(nextState);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('fit-theme', nextState ? 'dark' : 'light');
     }
   }
 }

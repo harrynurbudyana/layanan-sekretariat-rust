@@ -9,13 +9,16 @@
   import MasterView from './views/MasterView.svelte';
   import PanduanView from './views/PanduanView.svelte';
   import { router } from './lib/router.svelte';
+  import { sidebarState } from './lib/sidebar.svelte';
 </script>
 
 <div class="flex h-full min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors font-sans selection:bg-red-600 selection:text-white">
-  <!-- Desktop Sidebar -->
-  <div class="hidden md:flex md:w-64 md:flex-col shrink-0">
-    <Sidebar />
-  </div>
+  <!-- Desktop Sidebar (Bisa dimunculkan dan disembunyikan) -->
+  {#if sidebarState.isOpen}
+    <div class="hidden md:flex md:w-64 md:flex-col shrink-0 transition-all duration-200">
+      <Sidebar />
+    </div>
+  {/if}
 
   <!-- Main Content Area -->
   <div class="flex flex-col flex-1 min-w-0 overflow-y-auto">

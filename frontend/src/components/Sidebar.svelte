@@ -6,9 +6,11 @@
     CalendarDays, 
     HelpCircle, 
     Database, 
-    Building2 
+    Building2,
+    PanelLeftClose
   } from 'lucide-svelte';
   import { router } from '../lib/router.svelte';
+  import { sidebarState } from '../lib/sidebar.svelte';
   import { cn } from '../lib/utils';
 
   let { onCloseMobile }: { onCloseMobile?: () => void } = $props();
@@ -24,15 +26,29 @@
 
   function handleNav(href: string) {
     router.navigate(href);
-    if (onCloseMobile) onCloseMobile();
+    if (onCloseMobile) {
+      onCloseMobile();
+    } else {
+      sidebarState.closeMobile();
+    }
+  }
+
+  function handleCollapse() {
+    if (onCloseMobile) {
+      onCloseMobile();
+    } else if (window.innerWidth < 768) {
+      sidebarState.closeMobile();
+    } else {
+      sidebarState.toggle();
+    }
   }
 </script>
 
 <aside class="w-64 bg-slate-900 text-slate-100 flex flex-col h-full border-r border-slate-800 shrink-0 select-none">
   <!-- Brand Header -->
-  <div class="p-6 border-b border-slate-800">
+  <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center font-bold text-white shadow-md shadow-red-500/20">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center font-bold text-white shadow-md shadow-red-500/20 shrink-0">
         <Building2 class="h-5 w-5 text-white" />
       </div>
       <div>
@@ -44,6 +60,17 @@
         </p>
       </div>
     </div>
+
+    <!-- Collapse / Hide Button -->
+    <button
+      type="button"
+      onclick={handleCollapse}
+      class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+      title="Sembunyikan Sidebar"
+      aria-label="Sembunyikan Sidebar"
+    >
+      <PanelLeftClose class="w-5 h-5" />
+    </button>
   </div>
 
   <!-- Navigation Links -->
@@ -56,9 +83,10 @@
       {@const isActive = router.currentPath === item.href}
       {@const Icon = item.icon}
       <button
+        type="button"
         onclick={() => handleNav(item.href)}
         class={cn(
-          "w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer text-left",
+          "w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group cursor-pointer text-left",
           isActive
             ? "bg-red-600/15 text-red-400 border border-red-500/30 font-semibold shadow-sm"
             : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
