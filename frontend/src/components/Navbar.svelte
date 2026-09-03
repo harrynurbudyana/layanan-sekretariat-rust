@@ -57,10 +57,10 @@
     {#if admin.isAdmin}
       <div class="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-xs">
         <ShieldCheck class="h-4 w-4 text-emerald-600" />
-        <span class="hidden sm:inline">Admin Sekretariat</span>
+        <span class="hidden sm:inline">Staf Sekretariat</span>
         <button
           onclick={() => admin.logout()}
-          title="Keluar dari Mode Admin"
+          title="Kunci / Keluar Akses Staf"
           class="ml-1 sm:ml-2 p-0.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
         >
           <LogOut class="h-3.5 w-3.5" />
@@ -70,10 +70,10 @@
       <button
         onclick={() => admin.openLoginModal()}
         class="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer font-medium"
-        title="Masuk sebagai Admin Sekretariat"
+        title="Buka Akses Staf Sekretariat"
       >
         <Lock class="h-3.5 w-3.5 text-slate-400" />
-        <span class="hidden sm:inline">Masuk Admin</span>
+        <span class="hidden sm:inline">Akses Staf</span>
       </button>
     {/if}
 

@@ -202,6 +202,12 @@
     return `[No_Urut] / ${classCode} / ${signee} / ${year}`;
   });
 
+  $effect(() => {
+    if (!admin.isAdmin && mode === 'manual') {
+      mode = 'single';
+    }
+  });
+
   async function handleSubmit(e: Event) {
     e.preventDefault();
     errorMsg = null;
