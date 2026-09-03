@@ -125,7 +125,7 @@
       class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
       onclick={() => sidebarState.closeMobile()}
     ></div>
-    <div class="relative flex-1 flex flex-col max-w-xs w-full bg-slate-900 shadow-2xl animate-in slide-in-from-left duration-200">
+    <div class="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-slate-900 shadow-2xl animate-in slide-in-from-left duration-200">
       <Sidebar onCloseMobile={() => sidebarState.closeMobile()} />
     </div>
   </div>
