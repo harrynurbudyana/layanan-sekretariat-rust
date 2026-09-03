@@ -68,6 +68,18 @@
   let copiedBatch = $state(false);
 
   // Signee Options grouped as in Telkom University FIT
+  const categoryGroups = [
+    { key: "SKR", label: "SKR — Sekretariat & Undangan Resmi" },
+    { key: "AKD", label: "AKD — Akademik, Perkuliahan & Magang" },
+    { key: "KMH", label: "KMH — Kemahasiswaan, Lomba & Beasiswa" },
+    { key: "SDM", label: "SDM — Kepegawaian & Penugasan Dosen" },
+    { key: "SAM", label: "SAM — Kerjasama, MoU, MoA & Kemitraan" },
+    { key: "LIT", label: "LIT — Penelitian, Jurnal & Konferensi" },
+    { key: "ABD", label: "ABD — Pengabdian kepada Masyarakat (Abdimas)" },
+    { key: "AST", label: "AST — Sarana, Ruangan & Laboratorium" },
+    { key: "KUG", label: "KUG — Keuangan & Anggaran" },
+  ];
+
   const signeeGroups = [
     {
       group: "Pimpinan Fakultas",
@@ -182,6 +194,44 @@
     batchRows = batchRows.filter((_, idx) => idx !== index);
     batchCount = batchRows.length;
   }
+
+  // Grouped Categories and Units for clean optgroup dropdowns
+  let groupedCategories = $derived.by(() => {
+    const list = categoryGroups.map(g => ({
+      label: g.label,
+      items: categories.filter(c => c.group === g.key)
+    })).filter(g => g.items.length > 0);
+
+    const others = categories.filter(c => !categoryGroups.some(g => g.key === c.group));
+    if (others.length > 0) {
+      list.push({
+        label: "Lainnya / Klasifikasi Tambahan",
+        items: others
+      });
+    }
+    return list;
+  });
+
+  let groupedUnits = $derived.by(() => {
+    return [
+      {
+        label: "Pimpinan Fakultas & Dekanat",
+        items: units.filter(u => u.category === 'DEKANAT')
+      },
+      {
+        label: "Program Studi FIT",
+        items: units.filter(u => u.category === 'PRODI')
+      },
+      {
+        label: "Kepala Urusan / Bagian Layanan",
+        items: units.filter(u => u.category === 'BAGIAN')
+      },
+      {
+        label: "Kelompok Keahlian & Riset (KK / RA)",
+        items: units.filter(u => u.category === 'KELOMPOK_KEAHLIAN' || u.category === 'RISET')
+      }
+    ].filter(g => g.items.length > 0);
+  });
 
   // Selected elements derived
   let previewYear = $derived(letterDate ? new Date(letterDate).getFullYear() : new Date().getFullYear());
@@ -745,10 +795,12 @@
             onchange={onUnitChange}
             class="w-full bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500 focus:outline-none transition-all cursor-pointer"
           >
-            {#each units as u}
-              <option value={u.id}>
-                {u.name} ({u.signee_code || u.code})
-              </option>
+            {#each groupedUnits as group}
+              <optgroup label={group.label}>
+                {#each group.items as u}
+                  <option value={u.id}>{u.name} ({u.signee_code || u.code})</option>
+                {/each}
+              </optgroup>
             {/each}
           </select>
         </div>
@@ -765,8 +817,12 @@
               onchange={onCategoryChange}
               class="w-full bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500 focus:outline-none transition-all cursor-pointer"
             >
-              {#each categories as c}
-                <option value={c.id}>[{c.code}] {c.name}</option>
+              {#each groupedCategories as group}
+                <optgroup label={group.label}>
+                  {#each group.items as c}
+                    <option value={c.id}>[{c.code}] {c.name}</option>
+                  {/each}
+                </optgroup>
               {/each}
             </select>
           </div>
