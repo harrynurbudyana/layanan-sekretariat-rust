@@ -1,3 +1,16 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Prevent unconstrained SVG icon layout shift before stylesheet parses */
+svg {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Ensure smooth theme transitions without layout jitter */
+html, body {
+  transition-property: color, background-color, border-color;
+  transition-duration: 150ms;
+}
