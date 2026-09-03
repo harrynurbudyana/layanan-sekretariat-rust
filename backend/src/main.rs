@@ -329,6 +329,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Letters
         .route("/letters", get(get_letters))
         .route("/letters/generate", post(generate_letter))
+        .route("/letters/generate-batch", post(generate_batch_letters))
+        .route("/agenda/verify-password", post(verify_agenda_password))
         .route("/letters/{id}", put(update_letter).delete(delete_letter))
         .route("/letters/bulk-delete", post(bulk_delete_letters))
         // Rooms & Bookings
@@ -378,7 +380,7 @@ async fn verify_admin_pin(
     Json(input): Json<AdminVerifyInput>,
 ) -> impl IntoResponse {
     let pin = input.pin.trim();
-    if pin == "admin2026" || pin == "fit2026" {
+    if pin == "admin2026" || pin == "fit2026" || pin == "vokasibangunnegeri" {
         Json(serde_json::json!({
             "success": true,
             "message": "PIN admin valid"
@@ -1007,6 +1009,7 @@ async fn generate_letter(
 
     let letter_id = format!("cmt_{}", Uuid::new_v4().simple());
     let date_iso = parsed_date.format("%Y-%m-%d").to_string();
+    let now_ts = chrono::Utc::now().timestamp_millis();
     let letter_date_ts = parsed_date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis();
 
     sqlx::query(
@@ -1040,7 +1043,7 @@ async fn generate_letter(
     .bind(input.notes.as_deref().map(|s| s.trim()))
     .bind(input.is_manual)
     .bind(&unit.id)
-    .bind(&category.id)
+    .bind(&category.id).bind(now_ts).bind(now_ts)
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -1469,5 +1472,236 @@ async fn update_booking_status(
     Ok(Json(serde_json::json!({
         "success": true,
         "message": format!("Status peminjaman berhasil diubah menjadi {}", input.status)
+    })))
+}
+
+
+#[derive(Debug, Deserialize)]
+struct VerifyPasswordInput {
+    password: String,
+}
+
+async fn verify_agenda_password(
+    Json(input): Json<VerifyPasswordInput>,
+) -> impl IntoResponse {
+    if input.password.trim() == "vokasibangunnegeri" {
+        Json(serde_json::json!({ "success": true, "message": "Akses diberikan" }))
+    } else {
+        Json(serde_json::json!({ "success": false, "error": "Password salah. Akses ditolak." }))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct BatchItemInput {
+    applicant_name: Option<String>,
+    recipient: Option<String>,
+    subject: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GenerateBatchLetterInput {
+    count: usize,
+    unit_id: String,
+    category_id: String,
+    classification_code: Option<String>,
+    signee_code: Option<String>,
+    subject: String,
+    recipient: Option<String>,
+    applicant_name: String,
+    applicant_contact: Option<String>,
+    letter_date: Option<String>,
+    notes: Option<String>,
+    items: Option<Vec<BatchItemInput>>,
+}
+
+async fn generate_batch_letters(
+    State(state): State<AppState>,
+    Json(input): Json<GenerateBatchLetterInput>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let total_count = input.count.clamp(1, 100);
+    if input.unit_id.trim().is_empty()
+        || input.category_id.trim().is_empty()
+        || input.subject.trim().is_empty()
+        || input.applicant_name.trim().is_empty()
+    {
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "error": "Semua data wajib harus diisi."
+        })));
+    }
+
+    let parsed_date = if let Some(ref ds) = input.letter_date {
+        NaiveDate::parse_from_str(ds, "%Y-%m-%d")
+            .unwrap_or_else(|_| Local::now().date_naive())
+    } else {
+        Local::now().date_naive()
+    };
+
+    let year = parsed_date.year() as i64;
+    let month = parsed_date.month() as i64;
+    let month_romawi = get_roman_month(parsed_date.month());
+    let letter_date_ts = parsed_date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis();
+    let date_iso = parsed_date.format("%Y-%m-%d").to_string();
+    let now_ts = chrono::Utc::now().timestamp_millis();
+
+    let unit = sqlx::query_as::<_, Unit>(
+        r#"SELECT id, name, code, signeeCode, leaderName, category FROM "Unit" WHERE id = ?"#,
+    )
+    .bind(&input.unit_id)
+    .fetch_optional(&state.dev_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let category = sqlx::query_as::<_, LetterCategory>(
+        r#"SELECT id, name, code, "group", classificationCode, description, isActive FROM "LetterCategory" WHERE id = ?"#,
+    )
+    .bind(&input.category_id)
+    .fetch_optional(&state.dev_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let (unit, category) = match (unit, category) {
+        (Some(u), Some(c)) => (u, c),
+        _ => return Ok(Json(serde_json::json!({ "success": false, "error": "Unit atau Kategori tidak ditemukan." }))),
+    };
+
+    let active_classification = input
+        .classification_code
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(&category.code);
+
+    let active_signee = input
+        .signee_code
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(&unit.signee_code);
+
+    let mut tx = state.dev_pool.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let last_seq: Option<(i64,)> = sqlx::query_as(
+        r#"SELECT sequenceNumber FROM "LetterRequest" WHERE year = ? ORDER BY sequenceNumber DESC LIMIT 1"#,
+    )
+    .bind(year)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let start_sequence = last_seq.map(|s| s.0).unwrap_or(0) + 1;
+    let mut created_letters = Vec::new();
+
+    for i in 0..total_count {
+        let current_sequence = start_sequence + (i as i64);
+        let item_data = input.items.as_ref().and_then(|items| items.get(i));
+
+        let item_subject = match item_data.and_then(|it| it.subject.as_deref()).filter(|s| !s.trim().is_empty()) {
+            Some(s) => s.trim().to_string(),
+            None => {
+                if total_count > 1 {
+                    format!("{} (Nomor #{})", input.subject.trim(), i + 1)
+                } else {
+                    input.subject.trim().to_string()
+                }
+            }
+        };
+
+        let item_recipient = item_data
+            .and_then(|it| it.recipient.as_deref())
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| input.recipient.as_deref().filter(|s| !s.trim().is_empty()));
+
+        let item_applicant = item_data
+            .and_then(|it| it.applicant_name.as_deref())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| input.applicant_name.trim());
+
+        let full_number = format!("{current_sequence}/{active_classification}/{active_signee}/{year}");
+        let letter_id = format!("cmt_{}", Uuid::new_v4().simple());
+        let item_note = input.notes.as_deref().filter(|s| !s.trim().is_empty()).map(|s| s.to_string())
+            .or_else(|| if total_count > 1 { Some(format!("Batch {} Nomor (#{})", total_count, i + 1)) } else { None });
+
+        sqlx::query(
+            r#"
+            INSERT INTO "LetterRequest" (
+                id, sequenceNumber, monthRomawi, month, year, fullNumber,
+                classificationCode, signeeCode, subject, recipient,
+                applicantName, applicantContact, letterDate, notes, isManual, status,
+                unitId, categoryId, createdAt, updatedAt
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?, 0, 'ISSUED',
+                ?, ?,
+?, ?
+            )
+            "#,
+        )
+        .bind(&letter_id)
+        .bind(current_sequence)
+        .bind(month_romawi)
+        .bind(month)
+        .bind(year)
+        .bind(&full_number)
+        .bind(active_classification)
+        .bind(active_signee)
+        .bind(&item_subject)
+        .bind(item_recipient)
+        .bind(item_applicant)
+        .bind(input.applicant_contact.as_deref().map(|s| s.trim()))
+        .bind(letter_date_ts)
+        .bind(item_note.as_deref())
+        .bind(&unit.id)
+        .bind(&category.id).bind(now_ts).bind(now_ts)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        created_letters.push(serde_json::json!({
+            "id": letter_id,
+            "fullNumber": full_number,
+            "sequenceNumber": current_sequence,
+            "subject": item_subject,
+            "applicantName": item_applicant,
+            "recipient": item_recipient,
+            "letterDate": date_iso,
+            "unitName": unit.name,
+            "categoryName": category.name,
+            "classificationCode": active_classification,
+            "signeeCode": active_signee,
+            "year": year
+        }));
+    }
+
+    let final_sequence = start_sequence + (total_count as i64) - 1;
+    sqlx::query(
+        r#"
+        INSERT INTO "LetterCounter" (id, year, scope, currentNumber, updatedAt)
+        VALUES (?, ?, 'FIT', ?, ?)
+        ON CONFLICT(year, scope) DO UPDATE SET
+            currentNumber = max(currentNumber, excluded.currentNumber),
+            updatedAt = excluded.updatedAt
+        "#,
+    )
+    .bind(format!("cnt_{}_{}", year, Uuid::new_v4().simple()))
+    .bind(year)
+    .bind(final_sequence)
+    .bind(now_ts)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let start_number = format!("{start_sequence}/{active_classification}/{active_signee}/{year}");
+    let end_number = format!("{final_sequence}/{active_classification}/{active_signee}/{year}");
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "count": total_count,
+        "startNumber": start_number,
+        "endNumber": end_number,
+        "letters": created_letters
     })))
 }
