@@ -279,9 +279,22 @@ fn get_conflicting_codes(room_code: &str) -> Vec<&'static str> {
 // MAIN SERVER
 // ==========================================
 
+fn resolve_sqlite_url(url: &str) -> String {
+    if let Some(file_path) = url.strip_prefix("sqlite://") {
+        if !std::path::Path::new(file_path).exists() {
+            let backend_path = format!("backend/{}", file_path);
+            if std::path::Path::new(&backend_path).exists() {
+                return format!("sqlite://{}", backend_path);
+            }
+        }
+    }
+    url.to_string()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
+    let _ = dotenvy::from_path("backend/.env");
 
     tracing_subscriber::registry()
         .with(
@@ -291,10 +304,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let dev_db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite://data/dev.db".to_string());
-    let rooms_db_url = std::env::var("DATABASE_ROOMS_URL")
-        .unwrap_or_else(|_| "sqlite://data/rooms.db".to_string());
+    let dev_db_url = resolve_sqlite_url(
+        &std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://data/dev.db".to_string()),
+    );
+    let rooms_db_url = resolve_sqlite_url(
+        &std::env::var("DATABASE_ROOMS_URL").unwrap_or_else(|_| "sqlite://data/rooms.db".to_string()),
+    );
 
     let dev_pool = SqlitePoolOptions::new()
         .max_connections(5)
@@ -341,8 +356,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/rooms/bookings/{id}/status", put(update_booking_status))
         .with_state(state);
 
-    let static_service = ServeDir::new("../frontend/dist")
-        .not_found_service(ServeFile::new("../frontend/dist/index.html"));
+    let (dist_dir, index_html) = if std::path::Path::new("../frontend/dist").exists() {
+        ("../frontend/dist", "../frontend/dist/index.html")
+    } else if std::path::Path::new("frontend/dist").exists() {
+        ("frontend/dist", "frontend/dist/index.html")
+    } else {
+        ("../frontend/dist", "../frontend/dist/index.html")
+    };
+
+    let static_service = ServeDir::new(dist_dir)
+        .not_found_service(ServeFile::new(index_html));
 
     let app = Router::new()
         .nest("/api", api_routes)
@@ -350,9 +373,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(cors);
 
     let port: u16 = std::env::var("PORT")
-        .unwrap_or_else(|_| "8080".to_string())
+        .unwrap_or_else(|_| "8088".to_string())
         .parse()
-        .unwrap_or(8080);
+        .unwrap_or(8088);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("🚀 Server FIT E-Office (Rust + Svelte) running on http://{}", addr);

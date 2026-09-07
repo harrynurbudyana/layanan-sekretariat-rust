@@ -22,7 +22,7 @@ layanan-sekretariat-rust/
 │       └── main.rs             # Axum router, REST API handlers, static file serving
 └── frontend/                   # Svelte 5 Web UI
     ├── package.json
-    ├── vite.config.ts          # Proxy /api ke port 8080 saat development
+    ├── vite.config.ts          # Proxy /api ke port 8088 saat development
     └── src/
         ├── App.svelte          # UI Dashboard, Agenda Surat, Ruangan, & Booking
         └── app.css             # Tailwind CSS styling
@@ -39,7 +39,7 @@ layanan-sekretariat-rust/
    cd backend
    cargo run
    ```
-   Server backend akan aktif di `http://localhost:8080`.
+   Server backend akan aktif di `http://localhost:8088`.
 
 2. **Jalankan Frontend Svelte Dev Server (Tab Terminal Terpisah):**
    ```bash
@@ -62,7 +62,7 @@ layanan-sekretariat-rust/
    cd ../backend
    cargo run --release
    ```
-3. Buka `http://localhost:8080`. Seluruh antarmuka web dan API backend berjalan dari satu proses binary Rust!
+3. Buka `http://localhost:8088`. Seluruh antarmuka web dan API backend berjalan dari satu proses binary Rust!
 
 ---
 
