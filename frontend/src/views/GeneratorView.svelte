@@ -888,8 +888,9 @@
         <!-- 5. PEMOHON, WHATSAPP & EMAIL (3 cols) -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label for="applicant-input" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              {mode === 'batch' ? 'NAMA KOORDINATOR / PIC' : 'NAMA PEMOHON / PIC'} <span class="text-red-500">*</span>
+            <label for="applicant-input" class="flex items-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5 whitespace-nowrap">
+              <span>{mode === 'batch' ? 'NAMA KOORDINATOR / PIC' : 'NAMA PEMOHON / PIC'}</span>
+              <span class="text-red-500">*</span>
             </label>
             <input
               id="applicant-input"
@@ -902,8 +903,9 @@
           </div>
 
           <div>
-            <label for="phone-input" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              NOMOR WHATSAPP PEMOHON <span class="text-red-500">*</span>
+            <label for="phone-input" class="flex items-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5 whitespace-nowrap">
+              <span>NO. WHATSAPP PEMOHON</span>
+              <span class="text-red-500">*</span>
             </label>
             <input
               id="phone-input"
@@ -916,8 +918,9 @@
           </div>
 
           <div>
-            <label for="email-input" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              EMAIL PEMOHON <span class="text-red-500">*</span>
+            <label for="email-input" class="flex items-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5 whitespace-nowrap">
+              <span>EMAIL PEMOHON</span>
+              <span class="text-red-500">*</span>
             </label>
             <input
               id="email-input"

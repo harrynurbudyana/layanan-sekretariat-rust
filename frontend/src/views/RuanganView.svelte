@@ -619,8 +619,9 @@
           <!-- Phone, Email & Participant Count -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label for="booking-pic-phone" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Nomor WhatsApp PIC <span class="text-red-500">*</span>
+              <label for="booking-pic-phone" class="flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 whitespace-nowrap">
+                <span>No. WhatsApp PIC</span>
+                <span class="text-red-500">*</span>
               </label>
               <input
                 id="booking-pic-phone"
@@ -632,8 +633,11 @@
               />
             </div>
             <div>
-              <label for="booking-pic-email" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-                <span>Email Pemohon <span class="text-red-500">*</span></span>
+              <label for="booking-pic-email" class="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 whitespace-nowrap">
+                <span class="flex items-center gap-1">
+                  <span>Email Pemohon</span>
+                  <span class="text-red-500">*</span>
+                </span>
                 <span class="text-[10px] text-slate-400 font-normal">Notifikasi</span>
               </label>
               <input
