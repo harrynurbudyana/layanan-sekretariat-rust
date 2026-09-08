@@ -121,10 +121,12 @@
 <!-- Mobile Drawer -->
 {#if sidebarState.isMobileOpen}
   <div class="fixed inset-0 z-50 flex md:hidden animate-in fade-in duration-150">
-    <div
-      class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+    <button
+      type="button"
+      aria-label="Tutup menu navigasi"
+      class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity w-full h-full border-none p-0 cursor-default"
       onclick={() => sidebarState.closeMobile()}
-    ></div>
+    ></button>
     <div class="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-slate-900 shadow-2xl animate-in slide-in-from-left duration-200">
       <Sidebar onCloseMobile={() => sidebarState.closeMobile()} />
     </div>

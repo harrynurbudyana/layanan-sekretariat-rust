@@ -335,7 +335,6 @@
               type={showPassword ? 'text' : 'password'}
               bind:value={accessPassword}
               placeholder="Masukkan password staf sekretariat..."
-              autofocus
               class="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500"
             />
             <button
@@ -673,20 +672,20 @@
 
           <div class="space-y-3 text-xs">
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Perihal</label>
-              <input type="text" bind:value={editForm.subject} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
+              <label for="edit-subject" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Perihal</label>
+              <input id="edit-subject" type="text" bind:value={editForm.subject} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
             </div>
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Penerima</label>
-              <input type="text" bind:value={editForm.recipient} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
+              <label for="edit-recipient" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Penerima</label>
+              <input id="edit-recipient" type="text" bind:value={editForm.recipient} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
             </div>
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Pemohon</label>
-              <input type="text" bind:value={editForm.applicantName} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
+              <label for="edit-applicant" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Pemohon</label>
+              <input id="edit-applicant" type="text" bind:value={editForm.applicantName} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
             </div>
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Catatan</label>
-              <input type="text" bind:value={editForm.notes} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
+              <label for="edit-notes" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Catatan</label>
+              <input id="edit-notes" type="text" bind:value={editForm.notes} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
             </div>
           </div>
 

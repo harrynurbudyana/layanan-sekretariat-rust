@@ -280,14 +280,13 @@ fn get_conflicting_codes(room_code: &str) -> Vec<&'static str> {
 // ==========================================
 
 fn resolve_sqlite_url(url: &str) -> String {
-    if let Some(file_path) = url.strip_prefix("sqlite://") {
-        if !std::path::Path::new(file_path).exists() {
+    if let Some(file_path) = url.strip_prefix("sqlite://")
+        && !std::path::Path::new(file_path).exists() {
             let backend_path = format!("backend/{}", file_path);
             if std::path::Path::new(&backend_path).exists() {
                 return format!("sqlite://{}", backend_path);
             }
         }
-    }
     url.to_string()
 }
 
@@ -816,13 +815,12 @@ async fn get_letters(
 
     let mut count_sql = String::from(r#"SELECT count(l.id) FROM "LetterRequest" l WHERE 1=1"#);
 
-    if let Some(ref s) = filters.search {
-        if !s.trim().is_empty() {
+    if let Some(ref s) = filters.search
+        && !s.trim().is_empty() {
             let part = " AND (l.fullNumber LIKE ? OR l.subject LIKE ? OR l.applicantName LIKE ? OR l.recipient LIKE ?)";
             sql.push_str(part);
             count_sql.push_str(part);
         }
-    }
 
     if let Some(y) = filters.year {
         let part = format!(" AND l.year = {y}");
@@ -836,29 +834,26 @@ async fn get_letters(
         count_sql.push_str(&part);
     }
 
-    if let Some(ref uid) = filters.unit_id {
-        if !uid.trim().is_empty() && uid != "ALL" {
+    if let Some(ref uid) = filters.unit_id
+        && !uid.trim().is_empty() && uid != "ALL" {
             let part = format!(" AND l.unitId = '{uid}'");
             sql.push_str(&part);
             count_sql.push_str(&part);
         }
-    }
 
-    if let Some(ref st) = filters.status {
-        if !st.trim().is_empty() && st != "ALL" {
+    if let Some(ref st) = filters.status
+        && !st.trim().is_empty() && st != "ALL" {
             let part = format!(" AND l.status = {st}");
             sql.push_str(&part);
             count_sql.push_str(&part);
         }
-    }
 
-    if let Some(ref cid) = filters.category_id {
-        if !cid.trim().is_empty() && cid != "ALL" {
+    if let Some(ref cid) = filters.category_id
+        && !cid.trim().is_empty() && cid != "ALL" {
             let part = format!(" AND l.categoryId = '{cid}'");
             sql.push_str(&part);
             count_sql.push_str(&part);
         }
-    }
 
     sql.push_str(" ORDER BY l.year DESC, l.sequenceNumber DESC LIMIT ? OFFSET ?");
 
@@ -1234,29 +1229,25 @@ async fn get_room_bookings(
         "#,
     );
 
-    if let Some(ref d) = filters.date_str {
-        if !d.trim().is_empty() {
+    if let Some(ref d) = filters.date_str
+        && !d.trim().is_empty() {
             sql.push_str(&format!(" AND b.dateStr = '{d}'"));
         }
-    }
 
-    if let Some(ref rid) = filters.room_id {
-        if !rid.trim().is_empty() && rid != "ALL" {
+    if let Some(ref rid) = filters.room_id
+        && !rid.trim().is_empty() && rid != "ALL" {
             sql.push_str(&format!(" AND b.roomId = '{rid}'"));
         }
-    }
 
-    if let Some(ref st) = filters.status {
-        if !st.trim().is_empty() && st != "ALL" {
+    if let Some(ref st) = filters.status
+        && !st.trim().is_empty() && st != "ALL" {
             sql.push_str(&format!(" AND b.status = '{st}'"));
         }
-    }
 
-    if let Some(ref s) = filters.search {
-        if !s.trim().is_empty() {
+    if let Some(ref s) = filters.search
+        && !s.trim().is_empty() {
             sql.push_str(" AND (b.bookingNumber LIKE ? OR b.purpose LIKE ? OR b.applicantName LIKE ? OR b.unitName LIKE ?)");
         }
-    }
 
     sql.push_str(" ORDER BY b.dateStr DESC, b.startTime ASC LIMIT ? OFFSET ?");
 

@@ -479,10 +479,11 @@
           <!-- Room & Date -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-room" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Pilih Ruangan *
               </label>
               <select
+                id="booking-room"
                 bind:value={formRoomId}
                 onchange={checkConflict}
                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
@@ -494,10 +495,11 @@
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-date" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Tanggal Kegiatan *
               </label>
               <input
+                id="booking-date"
                 type="date"
                 bind:value={formDateStr}
                 onchange={checkConflict}
@@ -509,10 +511,11 @@
           <!-- Time Range -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-start-time" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Jam Mulai *
               </label>
               <input
+                id="booking-start-time"
                 type="time"
                 bind:value={formStartTime}
                 onchange={checkConflict}
@@ -520,10 +523,11 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-end-time" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Jam Selesai *
               </label>
               <input
+                id="booking-end-time"
                 type="time"
                 bind:value={formEndTime}
                 onchange={checkConflict}
@@ -550,10 +554,11 @@
 
           <!-- Purpose -->
           <div>
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+            <label for="booking-purpose" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
               Agenda / Keperluan Acara *
             </label>
             <input
+              id="booking-purpose"
               type="text"
               bind:value={formPurpose}
               placeholder="Misal: Rapat Koordinasi Kurikulum D3 Sistem Informasi"
@@ -564,10 +569,11 @@
           <!-- Unit & Applicant -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-unit" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Unit / Prodi / Bagian *
               </label>
               <input
+                id="booking-unit"
                 type="text"
                 bind:value={formUnitName}
                 placeholder="Misal: Prodi D3 Sistem Informasi"
@@ -575,10 +581,11 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-pic-name" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Nama Pemohon / PIC *
               </label>
               <input
+                id="booking-pic-name"
                 type="text"
                 bind:value={formApplicantName}
                 placeholder="Nama staf atau dosen PIC..."
@@ -590,10 +597,11 @@
           <!-- Phone & Participant Count -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-pic-phone" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Nomor WhatsApp PIC
               </label>
               <input
+                id="booking-pic-phone"
                 type="text"
                 bind:value={formApplicantPhone}
                 placeholder="081234567890"
@@ -601,10 +609,11 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label for="booking-participant-count" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Perkiraan Jumlah Peserta
               </label>
               <input
+                id="booking-participant-count"
                 type="number"
                 bind:value={formParticipantCount}
                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
@@ -614,10 +623,11 @@
 
           <!-- Facilities Notes -->
           <div>
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+            <label for="booking-facilities-notes" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
               Catatan Kebutuhan Fasilitas Tambahan
             </label>
             <textarea
+              id="booking-facilities-notes"
               rows="2"
               bind:value={formFacilityNotes}
               placeholder="Misal: Mohon disiapkan 2 mikrofon wireless dan pointer..."

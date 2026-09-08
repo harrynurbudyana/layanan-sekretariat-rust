@@ -374,26 +374,26 @@
 
         <div class="space-y-3 text-xs">
           <div>
-            <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Unit / Prodi *</label>
-            <input type="text" bind:value={unitForm.name} placeholder="Misal: S1 Rekayasa Perangkat Lunak" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs" />
+            <label for="unit-name" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Unit / Prodi *</label>
+            <input id="unit-name" type="text" bind:value={unitForm.name} placeholder="Misal: S1 Rekayasa Perangkat Lunak" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs" />
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kode Unit *</label>
-              <input type="text" bind:value={unitForm.code} placeholder="RPL" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs uppercase" />
+              <label for="unit-code" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kode Unit *</label>
+              <input id="unit-code" type="text" bind:value={unitForm.code} placeholder="RPL" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs uppercase" />
             </div>
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kode Signee *</label>
-              <input type="text" bind:value={unitForm.signee_code} placeholder="IT-D3-RPL" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs uppercase" />
+              <label for="unit-signee" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kode Signee *</label>
+              <input id="unit-signee" type="text" bind:value={unitForm.signee_code} placeholder="IT-D3-RPL" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs uppercase" />
             </div>
           </div>
           <div>
-            <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Pimpinan / Ka. Prodi</label>
-            <input type="text" bind:value={unitForm.leader_name} placeholder="Nama dosen pimpinan..." class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs" />
+            <label for="unit-leader" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Pimpinan / Ka. Prodi</label>
+            <input id="unit-leader" type="text" bind:value={unitForm.leader_name} placeholder="Nama dosen pimpinan..." class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs" />
           </div>
           <div>
-            <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kategori</label>
-            <select bind:value={unitForm.category} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs">
+            <label for="unit-category" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kategori</label>
+            <select id="unit-category" bind:value={unitForm.category} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs">
               <option value="PRODI">PRODI</option>
               <option value="DEKANAT">DEKANAT</option>
               <option value="BAGIAN">BAGIAN</option>
@@ -427,17 +427,17 @@
 
         <div class="space-y-3 text-xs">
           <div>
-            <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Kategori *</label>
-            <input type="text" bind:value={categoryForm.name} placeholder="Misal: Surat Keterangan Aktif Kuliah" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs" />
+            <label for="cat-name" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Nama Kategori *</label>
+            <input id="cat-name" type="text" bind:value={categoryForm.name} placeholder="Misal: Surat Keterangan Aktif Kuliah" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs" />
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kode Singkat *</label>
-              <input type="text" bind:value={categoryForm.code} placeholder="SKET" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs uppercase" />
+              <label for="cat-code" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Kode Singkat *</label>
+              <input id="cat-code" type="text" bind:value={categoryForm.code} placeholder="SKET" class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs uppercase" />
             </div>
             <div>
-              <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Grup</label>
-              <select bind:value={categoryForm.group} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs">
+              <label for="cat-group" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Grup</label>
+              <select id="cat-group" bind:value={categoryForm.group} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs">
                 <option value="AKD">Akademik (AKD)</option>
                 <option value="KMS">Kemahasiswaan (KMS)</option>
                 <option value="SDM">Sumber Daya (SDM)</option>
@@ -446,8 +446,8 @@
             </div>
           </div>
           <div>
-            <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Deskripsi / Peruntukan</label>
-            <textarea rows="2" bind:value={categoryForm.description} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs"></textarea>
+            <label for="cat-desc" class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Deskripsi / Peruntukan</label>
+            <textarea id="cat-desc" rows="2" bind:value={categoryForm.description} class="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs"></textarea>
           </div>
         </div>
 
