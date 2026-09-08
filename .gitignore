@@ -9,3 +9,13 @@ frontend/dist/
 
 # SQLite journals
 *.db-journal
+
+# Environment & Secrets
+.env
+.env.*
+*.env
+backend/.env
+frontend/.env
+!.env.example
+!*.env.example
+!**/.env.example
