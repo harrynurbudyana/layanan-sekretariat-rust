@@ -34,8 +34,7 @@ Sebelum melakukan deployment ke Virtual Private Server (VPS), pastikan hal-hal b
 | **Build Tools** | - | `build-essential`, `pkg-config`, `libssl-dev`, `git`, `curl` |
 | **Rust & Cargo** | **v1.85.0+** (Stable) | ⚠️ **PENTING:** Proyek menggunakan **Rust Edition 2024**. **JANGAN** gunakan `apt install rustc` dari distro Ubuntu/Debian karena versinya usang (< 1.85). Wajib gunakan **rustup**. |
 | **Node.js & npm**| **v18.x** atau **v20.x LTS** | Diperlukan untuk kompilasi bundle frontend Svelte 5 |
-| **Nginx** | Versi distro terbaru | Digunakan sebagai Reverse Proxy & SSL Termination |
-| **Certbot** | Terbaru | Untuk menerbitkan sertifikat SSL gratis (Let's Encrypt) |
+| **Reverse Proxy**| **Caddy** *(Rekomendasi)* **atau Nginx** | **Caddy** otomatis mengurus HTTPS/SSL (Let's Encrypt) tanpa butuh Certbot. Jika memilih **Nginx**, diperlukan `certbot`. |
 
 ### 3. Akun Pengirim Email (SMTP)
 - Akun Google Workspace / Gmail (misal: `e-office@tass.telkomuniversity.ac.id`).
@@ -52,7 +51,7 @@ Hubungkan terminal ke VPS Anda via SSH, lalu perbarui sistem dan pasang tools pe
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl git build-essential pkg-config libssl-dev nginx certbot python3-certbot-nginx
+sudo apt install -y curl git build-essential pkg-config libssl-dev
 ```
 
 *(Opsional tapi Direkomendasikan)* Jika VPS Anda hanya memiliki 1 GB RAM, buat Swap file 2 GB agar proses kompilasi Rust berjalan lancar tanpa kehabisan memori:
@@ -130,7 +129,7 @@ PORT=8088
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=e-office@tass.telkomuniversity.ac.id
-SMTP_PASSWORD=qcia jkcd pqjw hcez   # Ganti dengan 16 karakter App Password Anda
+SMTP_PASSWORD="qcia jkcd pqjw hcez"   # Ganti dengan 16 karakter App Password Anda
 SMTP_FROM="E-Office Sekre FIT <e-office@tass.telkomuniversity.ac.id>"
 SMTP_ADMIN_EMAIL=sekretariat@tass.telkomuniversity.ac.id
 SMTP_ENABLED=true
@@ -212,59 +211,97 @@ sudo systemctl status fit-eoffice
 
 ---
 
-### Langkah 9: Konfigurasi Nginx Reverse Proxy
+### Langkah 9: Konfigurasi Reverse Proxy & Domain SSL
 
-Buat file konfigurasi server block Nginx:
+Pilih salah satu dari dua opsi berikut untuk mengarahkan domain publik ke aplikasi:
 
-```bash
-sudo nano /etc/nginx/sites-available/fit-eoffice
-```
+#### 🌟 Opsi A: Menggunakan Caddy (SANGAT DIREKOMENDASIKAN)
+> **Kelebihan Caddy:**
+> - Konfigurasi hanya butuh **3 baris**.
+> - **Otomatis SSL HTTPS** (Let's Encrypt / ZeroSSL) diterbitkan dan diperbarui otomatis tanpa perlu install Certbot atau setup cron.
+> - Mendukung HTTP/2 dan HTTP/3 secara bawaan.
 
-Masukkan konfigurasi berikut (ganti `eoffice.tass.telkomuniversity.ac.id` dengan domain atau IP VPS Anda):
+1. **Instal Caddy di Ubuntu / Debian:**
+   ```bash
+   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+   sudo apt update
+   sudo apt install -y caddy
+   ```
 
-```nginx
-server {
-    listen 80;
-    server_name eoffice.tass.telkomuniversity.ac.id;
+2. **Edit file konfigurasi `/etc/caddy/Caddyfile`:**
+   ```bash
+   sudo nano /etc/caddy/Caddyfile
+   ```
+   Hapus isi defaultnya dan ganti dengan:
+   ```caddy
+   eoffice.tass.telkomuniversity.ac.id {
+       reverse_proxy 127.0.0.1:8088
+   }
+   ```
+   *(Ganti `eoffice.tass.telkomuniversity.ac.id` dengan nama domain yang mengarah ke IP VPS Anda)*
 
-    client_max_body_size 20M;
-
-    # Gzip compression
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
-
-    location / {
-        proxy_pass http://127.0.0.1:8088;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-Aktifkan konfigurasi dan reload Nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/fit-eoffice /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
+3. **Validasi & Reload Caddy:**
+   ```bash
+   sudo caddy validate --config /etc/caddy/Caddyfile
+   sudo systemctl reload caddy
+   ```
+   *Selesai! Domain Anda langsung aktif dengan HTTPS yang aman dan valid.*
 
 ---
 
-### Langkah 10: Setup Sertifikat SSL HTTPS (Let's Encrypt)
+#### 🌐 Opsi B: Menggunakan Nginx + Certbot
 
-Gunakan Certbot untuk mengamankan domain dengan HTTPS otomatis:
+Jika server Anda sudah memiliki Nginx yang sedang berjalan:
 
-```bash
-sudo certbot --nginx -d eoffice.tass.telkomuniversity.ac.id
-```
+1. **Instal Nginx dan Certbot:**
+   ```bash
+   sudo apt install -y nginx certbot python3-certbot-nginx
+   ```
 
-Pilih opsi redirect HTTP ke HTTPS. Certbot akan memperbarui sertifikat secara otomatis.
+2. **Buat file konfigurasi server block Nginx:**
+   ```bash
+   sudo nano /etc/nginx/sites-available/fit-eoffice
+   ```
+
+   Masukkan konfigurasi berikut:
+   ```nginx
+   server {
+       listen 80;
+       server_name eoffice.tass.telkomuniversity.ac.id;
+
+       client_max_body_size 20M;
+
+       # Gzip compression
+       gzip on;
+       gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+       location / {
+           proxy_pass http://127.0.0.1:8088;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection 'upgrade';
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_cache_bypass $http_upgrade;
+       }
+   }
+   ```
+
+3. **Aktifkan konfigurasi dan reload Nginx:**
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/fit-eoffice /etc/nginx/sites-enabled/
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+
+4. **Pasang Sertifikat SSL HTTPS via Certbot:**
+   ```bash
+   sudo certbot --nginx -d eoffice.tass.telkomuniversity.ac.id
+   ```
 
 ---
 
@@ -272,7 +309,14 @@ Pilih opsi redirect HTTP ke HTTPS. Certbot akan memperbarui sertifikat secara ot
 
 ### Melihat Log Real-Time Aplikasi
 ```bash
+# Log backend Rust
 sudo journalctl -u fit-eoffice -f
+
+# Log Caddy (jika menggunakan Caddy)
+sudo journalctl -u caddy -f
+
+# Status Caddy
+sudo systemctl status caddy
 ```
 
 ### Memeriksa Status Service
