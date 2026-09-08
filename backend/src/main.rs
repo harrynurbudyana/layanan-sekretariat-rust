@@ -355,6 +355,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/units/{id}", put(update_unit).delete(delete_unit))
         // Categories
         .route("/categories", get(get_categories).post(create_category))
+        .route("/categories/frequent-subjects", get(get_frequent_subjects))
         .route("/categories/{id}", put(update_category).delete(delete_category))
         // Letters
         .route("/letters", get(get_letters))
@@ -794,6 +795,36 @@ async fn delete_category(
         "success": true,
         "message": "Kategori berhasil dihapus"
     })))
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+struct FrequentSubject {
+    subject: String,
+    count: i64,
+    category_id: String,
+    category_code: String,
+    category_name: String,
+}
+
+async fn get_frequent_subjects(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<FrequentSubject>>, (StatusCode, String)> {
+    let rows = sqlx::query_as::<_, FrequentSubject>(
+        r#"
+        SELECT l.subject, count(*) as count, c.id as category_id, c.code as category_code, c.name as category_name
+        FROM "LetterRequest" l
+        JOIN "LetterCategory" c ON l.categoryId = c.id
+        WHERE l.subject IS NOT NULL AND length(trim(l.subject)) > 4
+        GROUP BY trim(lower(l.subject))
+        ORDER BY count DESC
+        LIMIT 15
+        "#,
+    )
+    .fetch_all(&state.dev_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(rows))
 }
 
 // ------------------------------------------

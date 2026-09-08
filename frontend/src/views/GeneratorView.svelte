@@ -15,7 +15,11 @@
     FileSpreadsheet, 
     Plus, 
     Trash2,
-    CheckCircle2
+    CheckCircle2,
+    Search,
+    ChevronDown,
+    X,
+    Tag
   } from 'lucide-svelte';
   import { admin } from '../lib/admin.svelte';
   import { router } from '../lib/router.svelte';
@@ -70,15 +74,32 @@
 
   // Signee Options grouped as in Telkom University FIT
   const categoryGroups = [
-    { key: "SKR", label: "SKR — Sekretariat & Undangan Resmi" },
-    { key: "AKD", label: "AKD — Akademik, Perkuliahan & Magang" },
-    { key: "KMH", label: "KMH — Kemahasiswaan, Lomba & Beasiswa" },
-    { key: "SDM", label: "SDM — Kepegawaian & Penugasan Dosen" },
+    { key: "SKR", label: "SKR — Sekretariat Pimpinan & Undangan Dinas" },
+    { key: "AKD", label: "AKD — Akademik, Kurikulum, Perkuliahan & Magang" },
+    { key: "KMH", label: "KMH — Kemahasiswaan, Ormawa & Prestasi" },
+    { key: "SDM", label: "SDM — Sumber Daya Manusia & Kepegawaian" },
     { key: "SAM", label: "SAM — Kerjasama, MoU, MoA & Kemitraan" },
-    { key: "LIT", label: "LIT — Penelitian, Jurnal & Konferensi" },
+    { key: "LIT", label: "LIT — Penelitian & Publikasi Ilmiah" },
     { key: "ABD", label: "ABD — Pengabdian kepada Masyarakat (Abdimas)" },
-    { key: "AST", label: "AST — Sarana, Ruangan & Laboratorium" },
-    { key: "KUG", label: "KUG — Keuangan & Anggaran" },
+    { key: "AST", label: "AST — Aset, Logistik & Pengadaan Sarana" },
+    { key: "KUG", label: "KUG — Keuangan, Anggaran & Perbendaharaan" },
+    { key: "SEN", label: "SEN — Senat Universitas" },
+    { key: "PRA", label: "PRA — Public Relations & Analytics" },
+    { key: "SAI", label: "SAI — Satuan Audit Internal" },
+    { key: "ORG", label: "ORG — Pengembangan Institusi & Organisasi" },
+    { key: "LGL", label: "LGL — Legal & Kebijakan Hukum" },
+    { key: "SPM", label: "SPM — Satuan Penjaminan Mutu" },
+    { key: "PTI", label: "PTI — Pusat Teknologi Informasi" },
+    { key: "KTU", label: "KTU — Komite Transformasi Universitas" },
+    { key: "LIB", label: "LIB — Perpustakaan" },
+    { key: "PSL", label: "PSL — Pasca Sarjana & CeLoE (Advanced Learning)" },
+    { key: "LAC", label: "LAC — Pusat Bahasa (Language Center)" },
+    { key: "PAD", label: "PAD — Pemasaran & Admisi (PMB)" },
+    { key: "CAE", label: "CAE — Karir, Hubungan Alumni & Endowment" },
+    { key: "HBH", label: "HBH — Hibah Dalam & Luar Negeri" },
+    { key: "IOF", label: "IOF — Urusan Internasional & Mobilitas (IO)" },
+    { key: "BTP", label: "BTP — Bandung Techno Park, Tenant & HAKI" },
+    { key: "PRJ", label: "PRJ — Proyek Mitra Bandung Techno Park" },
   ];
 
   const signeeGroups = [
@@ -129,12 +150,14 @@
   async function loadMetadata() {
     loadingMeta = true;
     try {
-      const [uRes, cRes] = await Promise.all([
+      const [uRes, cRes, fRes] = await Promise.all([
         fetch('/api/units').then(r => r.json()),
-        fetch('/api/categories').then(r => r.json())
+        fetch('/api/categories').then(r => r.json()),
+        fetch('/api/categories/frequent-subjects').then(r => r.json()).catch(() => [])
       ]);
       units = uRes;
       categories = cRes;
+      if (Array.isArray(fRes)) frequentSubjects = fRes;
 
       const defUnit = units.find(u => u.code === 'DEK' || u.signee_code === 'IT-DEK') || units[0];
       const defCat = categories.find(c => c.code === 'SKR05') || categories[0];
@@ -151,6 +174,116 @@
       console.error(e);
     } finally {
       loadingMeta = false;
+    }
+  }
+
+  // Category Search Modal & Filter State
+  let categorySearchModalOpen = $state(false);
+  let categoryModalSearch = $state('');
+  let categoryModalGroup = $state('ALL');
+  let currentCategoryObj = $derived(categories.find(c => c.id === categoryId));
+
+  let modalFilteredCategories = $derived.by(() => {
+    let list = categories;
+    if (categoryModalGroup !== 'ALL') {
+      list = list.filter(c => c.group === categoryModalGroup);
+    }
+    if (categoryModalSearch.trim()) {
+      const q = categoryModalSearch.toLowerCase().trim();
+      list = list.filter(c => 
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.code && c.code.toLowerCase().includes(q)) ||
+        (c.group && c.group.toLowerCase().includes(q)) ||
+        (c.description && c.description.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  });
+
+  function selectCategory(c: any) {
+    categoryId = c.id;
+    customClassification = c.code;
+    categorySearchModalOpen = false;
+  }
+
+  // Recommendations State
+  let frequentSubjects = $state<any[]>([]);
+  let recTab = $state<'curated' | 'history'>('curated');
+  let recommendationNotice = $state('');
+
+  const curatedRecommendations = [
+    {
+      title: "Surat Tugas Mengajar Dosen",
+      code: "AKD08",
+      template: "Surat Tugas Mengajar Dosen Semester Genap Tahun Akademik 2025/2026"
+    },
+    {
+      title: "Undangan Rapat Koordinasi",
+      code: "SKR05",
+      template: "Undangan Rapat Koordinasi Program Studi dan Layanan Akademik"
+    },
+    {
+      title: "Surat Pengantar Magang MBKM",
+      code: "AKD13",
+      template: "Surat Pengantar dan Izin Pelaksanaan Magang / Kerja Praktek MBKM Mahasiswa"
+    },
+    {
+      title: "PKS Dosen Luar Biasa (DLB)",
+      code: "SDM03",
+      template: "Perjanjian Kerja Sama (PKS) Pengajaran Dosen Luar Biasa (DLB)"
+    },
+    {
+      title: "Surat Tugas Sidang TA / Yudisium",
+      code: "AKD15",
+      template: "Surat Tugas Dosen Pembimbing dan Penguji Sidang Tugas Akhir / Proyek Akhir"
+    },
+    {
+      title: "Rekomendasi Lomba Mahasiswa",
+      code: "KMH04",
+      template: "Surat Tugas dan Rekomendasi Delegasi Mahasiswa Mengikuti Kompetisi Nasional"
+    },
+    {
+      title: "Surat Keterangan Mahasiswa Aktif",
+      code: "AKD20",
+      template: "Surat Keterangan Mahasiswa Aktif Kuliah untuk Keperluan Beasiswa / Instansi"
+    },
+    {
+      title: "Dispensasi Kuliah / Ujian",
+      code: "AKD24",
+      template: "Surat Permohonan Dispensasi Ketidakhadiran Perkuliahan dan Ujian Semester"
+    },
+    {
+      title: "Peminjaman Ruangan & Lab Komputer",
+      code: "AST18",
+      template: "Permohonan Izin Peminjaman Ruangan Laboratorium Komputer dan Bengkel FIT"
+    },
+    {
+      title: "Surat Tugas Pengabdian Masyarakat",
+      code: "ABD01",
+      template: "Surat Tugas Pelaksanaan Kegiatan Pengabdian kepada Masyarakat (Abdimas)"
+    },
+    {
+      title: "Surat Tugas Pemakalah Konferensi",
+      code: "LIT09",
+      template: "Surat Tugas Presenter / Pemakalah Konferensi Ilmiah Internasional"
+    },
+    {
+      title: "Pemanggilan Orang Tua Mahasiswa",
+      code: "KMH11",
+      template: "Surat Pemanggilan Orang Tua / Wali Mahasiswa Terkait Evaluasi Masa Studi"
+    }
+  ];
+
+  function applyRecommendation(text: string, code?: string) {
+    subject = text;
+    if (code) {
+      const matchCat = categories.find(c => c.code === code);
+      if (matchCat) {
+        categoryId = matchCat.id;
+        customClassification = matchCat.code;
+        recommendationNotice = `Perihal diterapkan & klasifikasi diset ke [${matchCat.code}] ${matchCat.name}`;
+        setTimeout(() => { recommendationNotice = ''; }, 4500);
+      }
     }
   }
 
@@ -817,23 +950,48 @@
         <!-- 2. KLASIFIKASI & PENANDATANGAN ROW (2 cols) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label for="category-select" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              KLASIFIKASI PERIHAL SURAT <span class="text-red-500">*</span>
-            </label>
-            <select
-              id="category-select"
-              bind:value={categoryId}
-              onchange={onCategoryChange}
-              class="w-full bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500 focus:outline-none transition-all cursor-pointer"
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="category-search-btn" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                KLASIFIKASI PERIHAL SURAT <span class="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onclick={() => { categoryModalSearch = ''; categorySearchModalOpen = true; }}
+                class="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 cursor-pointer"
+              >
+                <Search class="w-3 h-3" />
+                <span>Cari Kategori</span>
+              </button>
+            </div>
+
+            <!-- Enhanced Category Selector Button -->
+            <button
+              id="category-search-btn"
+              type="button"
+              onclick={() => { categoryModalSearch = ''; categorySearchModalOpen = true; }}
+              class="w-full text-left bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 hover:border-red-500 dark:hover:border-red-500 rounded-xl px-3.5 py-2 transition-all cursor-pointer shadow-xs group"
             >
-              {#each groupedCategories as group}
-                <optgroup label={group.label}>
-                  {#each group.items as c}
-                    <option value={c.id}>[{c.code}] {c.name}</option>
-                  {/each}
-                </optgroup>
-              {/each}
-            </select>
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  {#if currentCategoryObj}
+                    <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                      {currentCategoryObj.code}
+                    </span>
+                    <span class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                      {currentCategoryObj.name}
+                    </span>
+                  {:else}
+                    <span class="text-xs sm:text-sm text-slate-400">Pilih Klasifikasi Kategori...</span>
+                  {/if}
+                </div>
+                <div class="flex items-center gap-1 text-slate-400 group-hover:text-red-500 transition-colors shrink-0">
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                    {currentCategoryObj ? currentCategoryObj.group : 'PILIH'}
+                  </span>
+                  <ChevronDown class="w-4 h-4" />
+                </div>
+              </div>
+            </button>
           </div>
 
           <div>
@@ -872,9 +1030,18 @@
 
         <!-- 4. PERIHAL / URAIAN SURAT -->
         <div>
-          <label for="subject-textarea" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-            PERIHAL / URAIAN SURAT <span class="text-red-500">*</span>
-          </label>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
+            <label for="subject-textarea" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              PERIHAL / URAIAN SURAT <span class="text-red-500">*</span>
+            </label>
+            {#if recommendationNotice}
+              <span class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 animate-in fade-in flex items-center gap-1">
+                <CheckCircle2 class="w-3.5 h-3.5" />
+                <span>{recommendationNotice}</span>
+              </span>
+            {/if}
+          </div>
+
           <textarea
             id="subject-textarea"
             rows="2"
@@ -883,6 +1050,71 @@
             placeholder="Contoh: Surat Tugas Dosen Pembimbing Lapangan Magang MBKM Semester Ganjil 2026/2027"
             class="w-full bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-red-500 focus:outline-none transition-all"
           ></textarea>
+
+          <!-- REKOMENDASI PERIHAL SURAT SERING DIGUNAKAN -->
+          <div class="mt-2.5 p-3 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Sparkles class="w-3.5 h-3.5 text-amber-500" />
+                <span>Rekomendasi Perihal Populer</span>
+              </div>
+              <div class="flex items-center gap-1 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[10px]">
+                <button
+                  type="button"
+                  onclick={() => recTab = 'curated'}
+                  class="px-2 py-0.5 rounded-md font-semibold cursor-pointer transition-colors {recTab === 'curated' ? 'bg-red-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}"
+                >
+                  Format Baku FIT
+                </button>
+                {#if frequentSubjects.length > 0}
+                  <button
+                    type="button"
+                    onclick={() => recTab = 'history'}
+                    class="px-2 py-0.5 rounded-md font-semibold cursor-pointer transition-colors {recTab === 'history' ? 'bg-red-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}"
+                  >
+                    Riwayat Surat ({frequentSubjects.length})
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            <p class="text-[10px] text-slate-500 dark:text-slate-400">
+              Klik perihal di bawah ini untuk mengisi teks perihal sekaligus menyesuaikan klasifikasi kode surat secara otomatis:
+            </p>
+
+            <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+              {#if recTab === 'curated'}
+                {#each curatedRecommendations as rec}
+                  <button
+                    type="button"
+                    onclick={() => applyRecommendation(rec.template, rec.code)}
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 dark:bg-slate-800 dark:hover:bg-red-950/40 dark:text-slate-300 dark:hover:text-red-300 border border-slate-200/80 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-700/60 shadow-2xs transition-all cursor-pointer text-left group"
+                    title="Gunakan perihal ini (Klasifikasi: {rec.code})"
+                  >
+                    <span class="font-mono text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/80 px-1 py-0.2 rounded border border-amber-200/60 dark:border-amber-900/60 group-hover:border-red-300">
+                      {rec.code}
+                    </span>
+                    <span>{rec.title}</span>
+                  </button>
+                {/each}
+              {:else}
+                {#each frequentSubjects as f}
+                  <button
+                    type="button"
+                    onclick={() => applyRecommendation(f.subject, f.category_code)}
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 dark:bg-slate-800 dark:hover:bg-red-950/40 dark:text-slate-300 dark:hover:text-red-300 border border-slate-200/80 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-700/60 shadow-2xs transition-all cursor-pointer text-left group"
+                    title="{f.count} kali digunakan ({f.category_code} - {f.category_name})"
+                  >
+                    <span class="font-mono text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/80 px-1 py-0.2 rounded border border-amber-200/60 dark:border-amber-900/60 group-hover:border-red-300">
+                      {f.category_code}
+                    </span>
+                    <span class="capitalize">{f.subject}</span>
+                    <span class="text-[9px] font-bold text-red-600 dark:text-red-400">({f.count}x)</span>
+                  </button>
+                {/each}
+              {/if}
+            </div>
+          </div>
         </div>
 
         <!-- 5. PEMOHON, WHATSAPP & EMAIL (3 cols) -->
@@ -1081,4 +1313,121 @@
       </div>
     </div>
   </div>
+
+  <!-- MODAL PENCARIAN KATEGORI PERIHAL SURAT -->
+  {#if categorySearchModalOpen}
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <!-- Modal Header -->
+        <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Search class="w-4 h-4 text-red-500" />
+              <span>Cari Kategori & Klasifikasi Surat</span>
+            </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Pilih dari {categories.length} kategori resmi Universitas Telkom
+            </p>
+          </div>
+          <button
+            type="button"
+            onclick={() => categorySearchModalOpen = false}
+            class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <!-- Search & Filter Bar -->
+        <div class="p-4 border-b border-slate-200 dark:border-slate-800 space-y-3 bg-slate-50/50 dark:bg-slate-800/30">
+          <div class="relative">
+            <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              bind:value={categoryModalSearch}
+              placeholder="Ketik kode atau nama (misal: tugas, magang, cuti, SKR, AKD, ruangan)..."
+              class="w-full pl-9 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+            />
+            {#if categoryModalSearch}
+              <button
+                type="button"
+                onclick={() => categoryModalSearch = ''}
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+              >
+                <X class="w-3.5 h-3.5" />
+              </button>
+            {/if}
+          </div>
+
+          <!-- Group Filter Pills -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin text-xs">
+            <button
+              type="button"
+              onclick={() => categoryModalGroup = 'ALL'}
+              class="px-2.5 py-1 rounded-lg font-semibold shrink-0 cursor-pointer transition-colors {categoryModalGroup === 'ALL' ? 'bg-red-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100'}"
+            >
+              Semua ({categories.length})
+            </button>
+            {#each ['SKR', 'AKD', 'KMH', 'SDM', 'SAM', 'AST', 'KUG', 'LIT', 'ABD', 'SEN', 'PRA', 'PTI', 'SPM', 'ORG', 'LGL'] as grp}
+              <button
+                type="button"
+                onclick={() => categoryModalGroup = grp}
+                class="px-2.5 py-1 rounded-lg font-semibold shrink-0 cursor-pointer transition-colors {categoryModalGroup === grp ? 'bg-red-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100'}"
+              >
+                {grp} ({categories.filter(c => c.group === grp).length})
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Results List -->
+        <div class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 max-h-[50vh]">
+          {#if modalFilteredCategories.length === 0}
+            <div class="py-12 text-center text-slate-400 text-xs">
+              Tidak ditemukan kategori yang sesuai dengan kata kunci "{categoryModalSearch}".
+            </div>
+          {:else}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {#each modalFilteredCategories as c}
+                <button
+                  type="button"
+                  onclick={() => selectCategory(c)}
+                  class="p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between {c.id === categoryId ? 'bg-red-50/70 border-red-400 dark:bg-red-950/30 dark:border-red-700 ring-1 ring-red-500' : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'}"
+                >
+                  <div class="flex items-center justify-between gap-1 mb-1">
+                    <span class="font-mono text-xs font-bold px-1.5 py-0.2 rounded {c.id === categoryId ? 'bg-red-600 text-white' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-900'}">
+                      {c.code}
+                    </span>
+                    <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                      {c.group}
+                    </span>
+                  </div>
+                  <h4 class="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
+                    {c.name}
+                  </h4>
+                  {#if c.description}
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                      {c.description}
+                    </p>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="p-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+          <span>Menampilkan {modalFilteredCategories.length} dari {categories.length} kategori</span>
+          <button
+            type="button"
+            onclick={() => categorySearchModalOpen = false}
+            class="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-semibold rounded-lg cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
