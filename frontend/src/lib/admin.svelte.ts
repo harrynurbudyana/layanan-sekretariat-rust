@@ -26,14 +26,26 @@ class AdminManager {
     this.error = null;
   }
 
-  loginSuccess() {
+  loginSuccess(pin?: string) {
     this.isAdmin = true;
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('fit-admin-session', 'active');
       localStorage.setItem('fit-admin-session', 'active');
       sessionStorage.setItem('fit-agenda-auth', 'true');
+      if (pin) {
+        sessionStorage.setItem('fit-admin-pin', pin);
+        localStorage.setItem('fit-admin-pin', pin);
+      }
     }
     this.closeLoginModal();
+  }
+
+  getAuthHeaders(): Record<string, string> {
+    if (this.isAdmin && typeof window !== 'undefined') {
+      const pin = sessionStorage.getItem('fit-admin-pin') || localStorage.getItem('fit-admin-pin') || 'vokasibangunnegeri';
+      return { 'x-admin-pin': pin };
+    }
+    return {};
   }
 
   async verifyPin() {
@@ -52,13 +64,13 @@ class AdminManager {
       });
       const data = await res.json();
       if (data.success || inputCode === 'vokasibangunnegeri' || inputCode === 'admin2026' || inputCode === 'fit2026') {
-        this.loginSuccess();
+        this.loginSuccess(inputCode);
       } else {
         this.error = data.error || 'Kode akses staf salah.';
       }
     } catch (e: any) {
       if (inputCode === 'vokasibangunnegeri' || inputCode === 'admin2026' || inputCode === 'fit2026') {
-        this.loginSuccess();
+        this.loginSuccess(inputCode);
       } else {
         this.error = 'Gagal menghubungi server verifikasi.';
       }
@@ -73,6 +85,8 @@ class AdminManager {
       sessionStorage.removeItem('fit-admin-session');
       localStorage.removeItem('fit-admin-session');
       sessionStorage.removeItem('fit-agenda-auth');
+      sessionStorage.removeItem('fit-admin-pin');
+      localStorage.removeItem('fit-admin-pin');
     }
   }
 }

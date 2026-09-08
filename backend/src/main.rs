@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post, put},
     Json, Router,
@@ -1206,10 +1206,20 @@ async fn get_rooms(
 
 async fn get_room_bookings(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(filters): Query<BookingFilters>,
 ) -> Result<Json<Vec<RoomBookingResponse>>, (StatusCode, String)> {
     let limit = filters.limit.unwrap_or(100);
     let offset = filters.offset.unwrap_or(0);
+
+    let is_admin = headers
+        .get("x-admin-pin")
+        .and_then(|v| v.to_str().ok())
+        .map(|p| {
+            let p = p.trim();
+            p == "admin2026" || p == "fit2026" || p == "vokasibangunnegeri"
+        })
+        .unwrap_or(false);
 
     let mut sql = String::from(
         r#"
@@ -1280,7 +1290,24 @@ async fn get_room_bookings(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     };
 
-    Ok(Json(bookings))
+    let sanitized_bookings = if is_admin {
+        bookings
+    } else {
+        bookings
+            .into_iter()
+            .map(|mut b| {
+                b.purpose = "[Agenda Terjadwal]".to_string();
+                b.applicant_name = "[Disamarkan]".to_string();
+                b.applicant_phone = "-".to_string();
+                b.unit_name = "[Unit Kampus]".to_string();
+                b.facility_notes = None;
+                b.notes = None;
+                b
+            })
+            .collect()
+    };
+
+    Ok(Json(sanitized_bookings))
 }
 
 async fn check_room_availability(
@@ -1361,17 +1388,14 @@ async fn check_room_availability(
 
     if let Some(c) = conflict {
         let msg = format!(
-            "Jadwal bentrok! Ruangan telah dipesan oleh {} ({}) untuk agenda \"{}\" pada pukul {} - {} WIB.",
-            c.unit_name, c.applicant_name, c.purpose, c.start_time, c.end_time
+            "Jadwal bentrok! Ruangan telah terisi pada pukul {} - {} WIB. Silakan pilih jadwal waktu atau ruangan lain.",
+            c.start_time, c.end_time
         );
         Ok(Json(serde_json::json!({
             "available": false,
             "error": msg,
             "conflict": {
                 "roomName": c.room_name,
-                "purpose": c.purpose,
-                "unitName": c.unit_name,
-                "applicantName": c.applicant_name,
                 "timeRange": format!("{} - {}", c.start_time, c.end_time)
             }
         })))

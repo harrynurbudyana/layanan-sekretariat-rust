@@ -16,7 +16,12 @@
     X,
     Filter,
     Layers,
-    ShieldCheck
+    ShieldCheck,
+    Lock,
+    Eye,
+    EyeOff,
+    Sparkles,
+    Info
   } from 'lucide-svelte';
   import { admin } from '../lib/admin.svelte';
   import { formatDateIndo } from '../lib/utils';
@@ -27,6 +32,9 @@
 
   // Active Tab: 'form' | 'schedule' | 'list'
   let activeTab = $state<'form' | 'schedule' | 'list'>('schedule');
+
+  // Admin view toggle: show filled bookings details
+  let showAdminDetails = $state(false);
 
   // Form State
   let formRoomId = $state('');
@@ -56,12 +64,85 @@
   // List Filter
   let statusFilter = $state('ALL');
 
+  interface TimeSlot {
+    start: string;
+    end: string;
+    isFullDay?: boolean;
+  }
+
+  // Operating Hours: 08:00 - 17:00 WIB
+  const OPERATING_START = '08:00';
+  const OPERATING_END = '17:00';
+
+  /**
+   * Calculate available free slots during operating hours (08:00 - 17:00)
+   * General users only see these free intervals and NEVER see the occupied agenda details.
+   */
+  function calculateFreeSlots(roomBookings: any[]): TimeSlot[] {
+    const validBookings = roomBookings
+      .filter(b => b.status === 'CONFIRMED')
+      .map(b => ({
+        start: b.start_time < OPERATING_START ? OPERATING_START : b.start_time,
+        end: b.end_time > OPERATING_END ? OPERATING_END : b.end_time
+      }))
+      .filter(b => b.start < b.end)
+      .sort((a, b) => a.start.localeCompare(b.start));
+
+    if (validBookings.length === 0) {
+      return [{ start: OPERATING_START, end: OPERATING_END, isFullDay: true }];
+    }
+
+    // Merge overlapping or adjacent booked intervals
+    const merged: { start: string; end: string }[] = [];
+    for (const cur of validBookings) {
+      if (merged.length === 0) {
+        merged.push({ ...cur });
+      } else {
+        const last = merged[merged.length - 1];
+        if (cur.start <= last.end) {
+          if (cur.end > last.end) last.end = cur.end;
+        } else {
+          merged.push({ ...cur });
+        }
+      }
+    }
+
+    // Find gaps between booked intervals
+    const freeSlots: TimeSlot[] = [];
+    let cursor = OPERATING_START;
+
+    for (const busy of merged) {
+      if (busy.start > cursor) {
+        freeSlots.push({ start: cursor, end: busy.start });
+      }
+      if (busy.end > cursor) {
+        cursor = busy.end;
+      }
+    }
+
+    if (cursor < OPERATING_END) {
+      freeSlots.push({ start: cursor, end: OPERATING_END });
+    }
+
+    return freeSlots;
+  }
+
+  function selectSlot(roomId: string, slot: TimeSlot) {
+    formRoomId = roomId;
+    formDateStr = timelineDate;
+    formStartTime = slot.start;
+    formEndTime = slot.end;
+    activeTab = 'form';
+    checkConflict();
+  }
+
   async function loadData() {
     loading = true;
     try {
+      const headers = admin.getAuthHeaders();
       const [rRes, bRes] = await Promise.all([
         fetch('/api/rooms').then(r => r.json()),
-        fetch('/api/rooms/bookings').then(r => r.json())
+        fetch('/api/rooms/bookings', { headers }).then(r => r.json())
       ]);
       rooms = rRes;
       bookings = bRes;
@@ -77,6 +158,15 @@
 
   onMount(() => {
     loadData();
+  });
+
+  // Watch for admin login/logout state changes to update masked/unmasked data & tab access
+  $effect(() => {
+    const _ = admin.isAdmin;
+    loadData();
+    if (!admin.isAdmin && activeTab === 'list') {
+      activeTab = 'schedule';
+    }
   });
 
   async function checkConflict() {
@@ -99,7 +189,7 @@
       const data = await res.json();
       availabilityChecked = true;
       if (!data.available) {
-        conflictError = data.error || 'Jadwal ruangan bentrok.';
+        conflictError = data.error || 'Jadwal ruangan bentrok. Silakan pilih waktu lain.';
       }
     } catch (e) {
       conflictError = 'Gagal memeriksa bentrok jadwal.';
@@ -152,9 +242,13 @@
 
   async function updateStatus(bookingId: string, status: string) {
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...admin.getAuthHeaders()
+      };
       const res = await fetch(`/api/rooms/bookings/${bookingId}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ status })
       });
       const data = await res.json();
@@ -196,7 +290,7 @@
         onclick={() => activeTab = 'schedule'}
         class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer {activeTab === 'schedule' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}"
       >
-        Jadwal Ruangan
+        Jadwal Kosong
       </button>
       <button
         onclick={() => activeTab = 'form'}
@@ -204,37 +298,72 @@
       >
         Form Pengajuan
       </button>
-      <button
-        onclick={() => activeTab = 'list'}
-        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer {activeTab === 'list' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}"
-      >
-        Daftar Booking ({bookings.length})
-      </button>
+      {#if admin.isAdmin}
+        <button
+          onclick={() => activeTab = 'list'}
+          class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 {activeTab === 'list' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}"
+        >
+          <ShieldCheck class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          <span>Daftar Booking ({bookings.length})</span>
+        </button>
+      {/if}
     </div>
   </div>
 
-  <!-- TAB 1: SCHEDULE TIMELINE -->
+  <!-- TAB 1: SCHEDULE TIMELINE (SLOT KOSONG) -->
   {#if activeTab === 'schedule'}
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
         <div>
-          <h2 class="text-base font-bold text-slate-900 dark:text-white">Ketersediaan Ruangan Harian</h2>
-          <p class="text-xs text-slate-500">Pilih tanggal untuk melihat jadwal penggunaan ruangan</p>
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-bold text-slate-900 dark:text-white">Jadwal Kosong & Ketersediaan Ruangan</h2>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+              <CheckCircle2 class="w-3 h-3" />
+              Slot Kosong Aktif
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">Pilih tanggal untuk melihat jadwal slot waktu kosong yang siap dipinjam</p>
         </div>
+        
+        <div class="flex flex-wrap items-center gap-2.5">
+          {#if admin.isAdmin}
+            <button
+              type="button"
+              onclick={() => showAdminDetails = !showAdminDetails}
+              class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 {showAdminDetails ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}"
+            >
+              <ShieldCheck class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>{showAdminDetails ? 'Sembunyikan Agenda Terisi' : 'Mode Staf: Lihat Agenda Terisi'}</span>
+            </button>
+          {/if}
+
+          <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl">
+            <CalendarIcon class="w-4 h-4 text-slate-400" />
+            <input
+              type="date"
+              bind:value={timelineDate}
+              class="bg-transparent text-xs text-slate-900 dark:text-white focus:outline-none cursor-pointer"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Confidentiality Protection Notice for Users -->
+      <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
         <div class="flex items-center gap-2">
-          <CalendarIcon class="w-4 h-4 text-slate-400" />
-          <input
-            type="date"
-            bind:value={timelineDate}
-            class="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
-          />
+          <Lock class="w-4 h-4 text-slate-400 shrink-0" />
+          <span>
+            <strong>Kerahasiaan Agenda Terjaga:</strong> Pengguna umum hanya dapat melihat <strong>slot jadwal kosong</strong>. Rincian agenda kegiatan dan identitas peminjam dirahasiakan.
+          </span>
         </div>
+        <span class="text-[11px] font-medium text-slate-400 shrink-0">Jam Operasional: 08:00 - 17:00 WIB</span>
       </div>
 
       <!-- Rooms Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {#each rooms as room}
           {@const roomBookings = bookings.filter(b => b.room_id === room.id && b.date_str === timelineDate && b.status === 'CONFIRMED')}
+          {@const freeSlots = calculateFreeSlots(roomBookings)}
           <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between">
             <div>
               <div class="flex items-center justify-between mb-2">
@@ -248,28 +377,67 @@
               <h3 class="text-sm font-bold text-slate-900 dark:text-white">{room.name}</h3>
               <p class="text-[11px] text-slate-400 mb-3">{room.location}</p>
 
-              <!-- Booked Slots for this day -->
-              <div class="space-y-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-700/50">
-                <span class="text-[10px] font-bold uppercase text-slate-400 block">Jadwal Terisi:</span>
-                {#if roomBookings.length === 0}
-                  <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+              <!-- AVAILABLE FREE SLOTS (Jadwal Kosong) -->
+              <div class="space-y-2 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/50">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                     <CheckCircle2 class="w-3.5 h-3.5" />
-                    <span>Ruangan kosong seharian</span>
+                    <span>Slot Kosong (Tersedia):</span>
                   </span>
+                  {#if freeSlots.length > 0}
+                    <span class="text-[10px] text-slate-400">Pilih slot untuk pesan</span>
+                  {/if}
+                </div>
+
+                {#if freeSlots.length === 0}
+                  <div class="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 text-xs text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                    <XCircle class="w-4 h-4 shrink-0 text-rose-500" />
+                    <span class="font-medium text-[11px]">Tidak ada slot kosong pada tanggal ini (Penuh).</span>
+                  </div>
                 {:else}
-                  {#each roomBookings as bk}
-                    <div class="p-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-xs">
-                      <div class="font-mono font-bold text-red-600 dark:text-red-400 text-[11px]">
-                        {bk.start_time} - {bk.end_time} WIB
-                      </div>
-                      <div class="text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate">
-                        {bk.purpose}
-                      </div>
-                      <div class="text-[10px] text-slate-400">
-                        {bk.applicant_name} ({bk.unit_name})
-                      </div>
-                    </div>
-                  {/each}
+                  <div class="flex flex-wrap gap-1.5">
+                    {#each freeSlots as slot}
+                      <button
+                        type="button"
+                        onclick={() => selectSlot(room.id, slot)}
+                        title="Pilih slot {slot.start} - {slot.end} WIB"
+                        class="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs group"
+                      >
+                        <Clock class="w-3 h-3 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+                        <span class="font-mono">{slot.start} - {slot.end}</span>
+                        {#if slot.isFullDay}
+                          <span class="text-[10px] font-normal text-emerald-600/80 dark:text-emerald-400/80">(Seharian)</span>
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+
+                <!-- KHUSUS STAF SEKRETARIAT (ADMIN ONLY) -->
+                {#if admin.isAdmin && showAdminDetails}
+                  <div class="mt-3 pt-2.5 border-t border-dashed border-amber-200 dark:border-amber-800/60 space-y-1.5">
+                    <span class="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <ShieldCheck class="w-3 h-3" />
+                      <span>Jadwal Terisi (Data Staf):</span>
+                    </span>
+                    {#if roomBookings.length === 0}
+                      <span class="text-[10px] text-slate-400 italic block">Tidak ada peminjaman terdaftar.</span>
+                    {:else}
+                      {#each roomBookings as bk}
+                        <div class="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 text-xs">
+                          <div class="font-mono font-bold text-amber-700 dark:text-amber-400 text-[11px]">
+                            {bk.start_time} - {bk.end_time} WIB
+                          </div>
+                          <div class="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {bk.purpose}
+                          </div>
+                          <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                            {bk.applicant_name} ({bk.unit_name})
+                          </div>
+                        </div>
+                      {/each}
+                    {/if}
+                  </div>
                 {/if}
               </div>
             </div>
@@ -278,11 +446,17 @@
               onclick={() => {
                 formRoomId = room.id;
                 formDateStr = timelineDate;
+                if (freeSlots.length > 0) {
+                  formStartTime = freeSlots[0].start;
+                  formEndTime = freeSlots[0].end;
+                }
                 activeTab = 'form';
+                checkConflict();
               }}
-              class="mt-4 w-full py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-700 dark:text-white cursor-pointer transition-colors"
+              class="mt-4 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-xs flex items-center justify-center gap-1.5"
             >
-              Pinjam Ruangan Ini
+              <Plus class="w-3.5 h-3.5" />
+              <span>Pinjam Ruangan Ini</span>
             </button>
           </div>
         {/each}
@@ -495,23 +669,47 @@
 
   <!-- TAB 3: DAFTAR BOOKING -->
   {:else if activeTab === 'list'}
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-base font-bold text-slate-900 dark:text-white">Daftar Pengajuan Peminjaman</h2>
-        <div class="flex items-center gap-2">
-          <Filter class="w-4 h-4 text-slate-400" />
-          <select
-            bind:value={statusFilter}
-            class="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200"
-          >
-            <option value="ALL">Semua Status</option>
-            <option value="CONFIRMED">CONFIRMED (Disetujui)</option>
-            <option value="PENDING">PENDING (Menunggu)</option>
-            <option value="REJECTED">REJECTED (Ditolak)</option>
-            <option value="CANCELLED">CANCELLED (Dibatalkan)</option>
-          </select>
+    {#if !admin.isAdmin}
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center max-w-md mx-auto space-y-4 shadow-sm">
+        <div class="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center">
+          <Lock class="w-7 h-7" />
         </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Akses Terbatas Staf Sekretariat</h3>
+          <p class="text-xs text-slate-500 mt-1 leading-relaxed">
+            Daftar agenda peminjaman ruangan bersifat rahasia internal dan hanya dapat diakses oleh staf Sekretariat FIT.
+          </p>
+        </div>
+        <button
+          onclick={() => admin.openLoginModal()}
+          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm transition-colors"
+        >
+          Masuk Akses Staf
+        </button>
       </div>
+    {:else}
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-bold text-slate-900 dark:text-white">Daftar Pengajuan Peminjaman Ruangan</h2>
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
+              Khusus Staf
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <Filter class="w-4 h-4 text-slate-400" />
+            <select
+              bind:value={statusFilter}
+              class="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200"
+            >
+              <option value="ALL">Semua Status</option>
+              <option value="CONFIRMED">CONFIRMED (Disetujui)</option>
+              <option value="PENDING">PENDING (Menunggu)</option>
+              <option value="REJECTED">REJECTED (Ditolak)</option>
+              <option value="CANCELLED">CANCELLED (Dibatalkan)</option>
+            </select>
+          </div>
+        </div>
 
       <div class="space-y-3">
         {#each filteredBookings as booking}
@@ -564,6 +762,7 @@
         {/if}
       </div>
     </div>
+    {/if}
   {/if}
 
   <!-- Booking Success Modal -->
