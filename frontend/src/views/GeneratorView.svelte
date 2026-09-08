@@ -38,6 +38,7 @@
   let recipient = $state('');
   let applicantName = $state('');
   let applicantContact = $state('');
+  let applicantEmail = $state('');
   let letterDate = $state(new Date().toISOString().slice(0, 10));
   let notes = $state('');
 
@@ -262,8 +263,13 @@
     e.preventDefault();
     errorMsg = null;
 
-    if (!unitId || !categoryId || !subject.trim() || !applicantName.trim()) {
-      errorMsg = 'Harap lengkapi semua field wajib bertanda bintang (*).';
+    if (!unitId || !categoryId || !subject.trim() || !applicantName.trim() || !applicantContact.trim() || !applicantEmail.trim()) {
+      errorMsg = 'Harap lengkapi semua field wajib bertanda bintang (*), termasuk Nomor WhatsApp dan Email Pemohon.';
+      return;
+    }
+
+    if (!applicantEmail.includes('@') || !applicantEmail.includes('.')) {
+      errorMsg = 'Format email pemohon tidak valid.';
       return;
     }
 
@@ -292,6 +298,7 @@
             recipient: recipient.trim() || null,
             applicant_name: applicantName.trim(),
             applicant_contact: applicantContact.trim() || null,
+            applicant_email: applicantEmail.trim() || null,
             letter_date: letterDate,
             notes: notes.trim() || null,
             items
@@ -320,6 +327,7 @@
             recipient: recipient.trim() || null,
             applicant_name: applicantName.trim(),
             applicant_contact: applicantContact.trim() || null,
+            applicant_email: applicantEmail.trim() || null,
             letter_date: letterDate,
             notes: notes.trim() || null
           })
@@ -380,6 +388,7 @@
     subject = '';
     recipient = '';
     applicantContact = '';
+    applicantEmail = '';
     notes = '';
     manualFullNumber = '';
     manualSequence = null;
@@ -876,31 +885,46 @@
           ></textarea>
         </div>
 
-        <!-- 5. PEMOHON & WHATSAPP (2 cols) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- 5. PEMOHON, WHATSAPP & EMAIL (3 cols) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label for="applicant-input" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              {mode === 'batch' ? 'NAMA KOORDINATOR / PIC PENGAJU' : 'NAMA PEMOHON / PIC'} <span class="text-red-500">*</span>
+              {mode === 'batch' ? 'NAMA KOORDINATOR / PIC' : 'NAMA PEMOHON / PIC'} <span class="text-red-500">*</span>
             </label>
             <input
               id="applicant-input"
               type="text"
               bind:value={applicantName}
               required
-              placeholder="Nama Dosen / Staff / Koordinator"
+              placeholder="Nama Dosen / Staff / PIC"
               class="w-full bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-red-500 focus:outline-none transition-all"
             />
           </div>
 
           <div>
             <label for="phone-input" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              NOMOR WHATSAPP PEMOHON (OPSIONAL)
+              NOMOR WHATSAPP PEMOHON <span class="text-red-500">*</span>
             </label>
             <input
               id="phone-input"
               type="tel"
+              required
               bind:value={applicantContact}
               placeholder="0812xxxxxxxx"
+              class="w-full bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-red-500 focus:outline-none transition-all"
+            />
+          </div>
+
+          <div>
+            <label for="email-input" class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+              EMAIL PEMOHON <span class="text-red-500">*</span>
+            </label>
+            <input
+              id="email-input"
+              type="email"
+              required
+              bind:value={applicantEmail}
+              placeholder="nama@telkomuniversity.ac.id"
               class="w-full bg-slate-50 dark:bg-[#1A2234] border border-slate-300 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-red-500 focus:outline-none transition-all"
             />
           </div>

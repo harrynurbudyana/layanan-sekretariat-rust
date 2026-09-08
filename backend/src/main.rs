@@ -14,6 +14,8 @@ use tower_http::services::{ServeDir, ServeFile};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 
+mod mailer;
+
 #[derive(Clone)]
 struct AppState {
     dev_pool: SqlitePool,
@@ -88,6 +90,8 @@ struct LetterResponse {
     applicant_name: String,
     #[sqlx(rename = "applicantContact")]
     applicant_contact: Option<String>,
+    #[sqlx(default, rename = "applicantEmail")]
+    applicant_email: Option<String>,
     #[sqlx(rename = "letterDate")]
     letter_date: String,
     status: String,
@@ -118,6 +122,7 @@ struct GenerateLetterInput {
     recipient: Option<String>,
     applicant_name: String,
     applicant_contact: Option<String>,
+    applicant_email: Option<String>,
     letter_date: Option<String>,
     notes: Option<String>,
 }
@@ -175,13 +180,15 @@ struct RoomBookingResponse {
     applicant_name: String,
     #[sqlx(rename = "applicantPhone")]
     applicant_phone: String,
+    #[sqlx(default, rename = "applicantEmail")]
+    applicant_email: Option<String>,
     #[sqlx(rename = "participantCount")]
     participant_count: i64,
     #[sqlx(rename = "facilityNotes")]
     facility_notes: Option<String>,
     status: String,
     notes: Option<String>,
-    #[sqlx(rename = "roomName")]
+    #[sqlx(default, rename = "roomName")]
     room_name: Option<String>,
 }
 
@@ -195,6 +202,7 @@ struct CreateBookingInput {
     unit_name: String,
     applicant_name: String,
     applicant_phone: String,
+    applicant_email: Option<String>,
     #[serde(default = "default_participants")]
     participant_count: i64,
     facility_notes: Option<String>,
@@ -315,10 +323,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&dev_db_url)
         .await?;
 
+    let _ = sqlx::query(r#"ALTER TABLE "LetterRequest" ADD COLUMN applicantEmail TEXT"#)
+        .execute(&dev_pool)
+        .await;
+
     let rooms_pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect(&rooms_db_url)
         .await?;
+
+    let _ = sqlx::query(r#"ALTER TABLE "RoomBooking" ADD COLUMN applicantEmail TEXT"#)
+        .execute(&rooms_pool)
+        .await;
 
     let state = AppState {
         dev_pool,
@@ -377,7 +393,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(8088);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    println!("🚀 Server FIT E-Office (Rust + Svelte) running on http://{}", addr);
+    println!("🚀 Server FIT E-Office (Rust + Svelte) running on http://localhost:{}", port);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
@@ -927,10 +943,12 @@ async fn generate_letter(
         || input.category_id.trim().is_empty()
         || input.subject.trim().is_empty()
         || input.applicant_name.trim().is_empty()
+        || input.applicant_contact.as_deref().unwrap_or("").trim().is_empty()
+        || input.applicant_email.as_deref().unwrap_or("").trim().is_empty()
     {
         return Ok(Json(serde_json::json!({
             "success": false,
-            "error": "Semua data wajib (Unit/Prodi, Kategori, Perihal, Pemohon) harus diisi."
+            "error": "Semua field bertanda bintang wajib diisi (termasuk nomor WhatsApp dan email pemohon)."
         })));
     }
 
@@ -1035,12 +1053,12 @@ async fn generate_letter(
         INSERT INTO "LetterRequest" (
             id, sequenceNumber, monthRomawi, month, year, fullNumber,
             classificationCode, signeeCode, subject, recipient,
-            applicantName, applicantContact, letterDate, notes, isManual, status,
+            applicantName, applicantContact, applicantEmail, letterDate, notes, isManual, status,
             unitId, categoryId, createdAt, updatedAt
         ) VALUES (
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, 'ISSUED',
+            ?, ?, ?, ?, ?, ?, 'ISSUED',
             ?, ?, datetime('now'), datetime('now')
         )
         "#,
@@ -1057,6 +1075,7 @@ async fn generate_letter(
     .bind(input.recipient.as_deref().map(|s| s.trim()))
     .bind(input.applicant_name.trim())
     .bind(input.applicant_contact.as_deref().map(|s| s.trim()))
+    .bind(input.applicant_email.as_deref().map(|s| s.trim()))
     .bind(letter_date_ts)
     .bind(input.notes.as_deref().map(|s| s.trim()))
     .bind(input.is_manual)
@@ -1220,7 +1239,7 @@ async fn get_room_bookings(
         r#"
         SELECT 
             b.id, b.bookingNumber, b.roomId, b.dateStr, b.startTime, b.endTime,
-            b.purpose, b.unitName, b.applicantName, b.applicantPhone, b.participantCount,
+            b.purpose, b.unitName, b.applicantName, b.applicantPhone, b.applicantEmail, b.participantCount,
             b.facilityNotes, b.status, b.notes,
             r.name as roomName
         FROM "RoomBooking" b
@@ -1350,11 +1369,11 @@ async fn check_room_availability(
     let mut q_str = format!(
         r#"
         SELECT b.id, b.bookingNumber, b.roomId, b.dateStr, b.startTime, b.endTime,
-               b.purpose, b.unitName, b.applicantName, b.applicantPhone, b.participantCount,
+               b.purpose, b.unitName, b.applicantName, b.applicantPhone, b.applicantEmail, b.participantCount,
                b.facilityNotes, b.status, b.notes, r.name as roomName
         FROM "RoomBooking" b
         LEFT JOIN "Room" r ON b.roomId = r.id
-        WHERE b.dateStr = ? AND b.status = 'CONFIRMED' AND b.roomId IN ({id_placeholders})
+        WHERE b.dateStr = ? AND b.status IN ('CONFIRMED', 'PENDING') AND b.roomId IN ({id_placeholders})
         "#
     );
 
@@ -1404,10 +1423,12 @@ async fn create_room_booking(
     if input.purpose.trim().is_empty()
         || input.unit_name.trim().is_empty()
         || input.applicant_name.trim().is_empty()
+        || input.applicant_phone.trim().is_empty()
+        || input.applicant_email.as_deref().unwrap_or("").trim().is_empty()
     {
         return Ok(Json(serde_json::json!({
             "success": false,
-            "error": "Semua field bertanda bintang wajib diisi."
+            "error": "Semua field bertanda bintang wajib diisi (termasuk nomor WhatsApp dan email pemohon)."
         })));
     }
 
@@ -1447,17 +1468,24 @@ async fn create_room_booking(
     let id = format!("cmt_{}", Uuid::new_v4().simple());
     let booking_date_iso = format!("{}T{}:00", input.date_str, input.start_time);
 
+    let room_name: String = sqlx::query_scalar(r#"SELECT name FROM "Room" WHERE id = ?"#)
+        .bind(&input.room_id)
+        .fetch_optional(&state.rooms_pool)
+        .await
+        .unwrap_or(None)
+        .unwrap_or_else(|| input.room_id.clone());
+
     sqlx::query(
         r#"
         INSERT INTO "RoomBooking" (
             id, bookingNumber, roomId, bookingDate, dateStr,
             startTime, endTime, purpose, unitName, applicantName,
-            applicantPhone, participantCount, facilityNotes, status,
+            applicantPhone, applicantEmail, participantCount, facilityNotes, status,
             createdAt, updatedAt
         ) VALUES (
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
-            ?, ?, ?, 'CONFIRMED',
+            ?, ?, ?, ?, 'PENDING',
             datetime('now'), datetime('now')
         )
         "#,
@@ -1473,11 +1501,31 @@ async fn create_room_booking(
     .bind(input.unit_name.trim())
     .bind(input.applicant_name.trim())
     .bind(input.applicant_phone.trim())
+    .bind(input.applicant_email.as_deref().map(|s| s.trim()))
     .bind(input.participant_count)
     .bind(input.facility_notes.as_deref().map(|s| s.trim()))
     .execute(&state.rooms_pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Kirim notifikasi email Tahap 1 (Pending Approval) ke Pemohon dan Staf Sekretariat
+    let notif = mailer::BookingNotification {
+        booking_number: booking_number.clone(),
+        room_name,
+        date_str: input.date_str.clone(),
+        start_time: input.start_time.clone(),
+        end_time: input.end_time.clone(),
+        purpose: input.purpose.clone(),
+        unit_name: input.unit_name.clone(),
+        applicant_name: input.applicant_name.clone(),
+        applicant_phone: input.applicant_phone.clone(),
+        applicant_email: input.applicant_email.clone(),
+        participant_count: input.participant_count,
+        facility_notes: input.facility_notes.clone(),
+    };
+    tokio::spawn(async move {
+        mailer::send_submission_notifications(notif).await;
+    });
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -1487,7 +1535,8 @@ async fn create_room_booking(
             "dateStr": input.date_str,
             "startTime": input.start_time,
             "endTime": input.end_time,
-            "purpose": input.purpose
+            "purpose": input.purpose,
+            "status": "PENDING"
         }
     })))
 }
@@ -1497,19 +1546,65 @@ async fn update_booking_status(
     Path(id): Path<String>,
     Json(input): Json<UpdateBookingStatusInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let new_status = input.status.trim().to_uppercase();
+
+    // Ambil data booking lengkap untuk pengiriman notifikasi keputusan ke pemohon
+    let booking_opt: Option<RoomBookingResponse> = sqlx::query_as(
+        r#"
+        SELECT b.*, r.name as roomName
+        FROM "RoomBooking" b
+        LEFT JOIN "Room" r ON b.roomId = r.id
+        WHERE b.id = ?
+        "#,
+    )
+    .bind(&id)
+    .fetch_optional(&state.rooms_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query(
         r#"UPDATE "RoomBooking" SET status = ?, notes = ?, updatedAt = datetime('now') WHERE id = ?"#,
     )
-    .bind(input.status.trim().to_uppercase())
+    .bind(&new_status)
     .bind(input.notes.as_deref().map(|s| s.trim()))
     .bind(&id)
     .execute(&state.rooms_pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Jika status diubah menjadi CONFIRMED atau REJECTED, kirim email keputusan ke pemohon
+    if let Some(b) = booking_opt {
+        if new_status == "CONFIRMED" || new_status == "REJECTED" {
+            let notif = mailer::BookingNotification {
+                booking_number: b.booking_number,
+                room_name: b.room_name.unwrap_or_else(|| b.room_id.clone()),
+                date_str: b.date_str,
+                start_time: b.start_time,
+                end_time: b.end_time,
+                purpose: b.purpose,
+                unit_name: b.unit_name,
+                applicant_name: b.applicant_name,
+                applicant_phone: b.applicant_phone,
+                applicant_email: b.applicant_email,
+                participant_count: b.participant_count,
+                facility_notes: b.facility_notes,
+            };
+            let status_clone = new_status.clone();
+            let notes_clone = input.notes.clone();
+            tokio::spawn(async move {
+                mailer::send_approval_decision_notification(
+                    notif,
+                    status_clone,
+                    notes_clone,
+                )
+                .await;
+            });
+        }
+    }
+
     Ok(Json(serde_json::json!({
         "success": true,
-        "message": format!("Status peminjaman berhasil diubah menjadi {}", input.status)
+        "message": format!("Status peminjaman berhasil diubah menjadi {}", new_status)
     })))
 }
 
@@ -1547,6 +1642,7 @@ struct GenerateBatchLetterInput {
     recipient: Option<String>,
     applicant_name: String,
     applicant_contact: Option<String>,
+    applicant_email: Option<String>,
     letter_date: Option<String>,
     notes: Option<String>,
     items: Option<Vec<BatchItemInput>>,
@@ -1561,10 +1657,12 @@ async fn generate_batch_letters(
         || input.category_id.trim().is_empty()
         || input.subject.trim().is_empty()
         || input.applicant_name.trim().is_empty()
+        || input.applicant_contact.as_deref().unwrap_or("").trim().is_empty()
+        || input.applicant_email.as_deref().unwrap_or("").trim().is_empty()
     {
         return Ok(Json(serde_json::json!({
             "success": false,
-            "error": "Semua data wajib harus diisi."
+            "error": "Semua field bertanda bintang wajib diisi (termasuk nomor WhatsApp dan email pemohon)."
         })));
     }
 
@@ -1664,12 +1762,12 @@ async fn generate_batch_letters(
             INSERT INTO "LetterRequest" (
                 id, sequenceNumber, monthRomawi, month, year, fullNumber,
                 classificationCode, signeeCode, subject, recipient,
-                applicantName, applicantContact, letterDate, notes, isManual, status,
+                applicantName, applicantContact, applicantEmail, letterDate, notes, isManual, status,
                 unitId, categoryId, createdAt, updatedAt
             ) VALUES (
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?,
-                ?, ?, ?, ?, 0, 'ISSUED',
+                ?, ?, ?, ?, ?, 0, 'ISSUED',
                 ?, ?,
 ?, ?
             )
@@ -1687,6 +1785,7 @@ async fn generate_batch_letters(
         .bind(item_recipient)
         .bind(item_applicant)
         .bind(input.applicant_contact.as_deref().map(|s| s.trim()))
+        .bind(input.applicant_email.as_deref().map(|s| s.trim()))
         .bind(letter_date_ts)
         .bind(item_note.as_deref())
         .bind(&unit.id)

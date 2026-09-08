@@ -83,7 +83,7 @@
         <button
           type="button"
           onclick={() => admin.logout()}
-          title="Kunci / Keluar Akses Staf"
+          title="Kunci / Keluar Admin Staf Sekretariat"
           class="ml-1 sm:ml-2 p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40"
         >
           <LogOut size={14} class="w-3.5 h-3.5 shrink-0" />
@@ -94,10 +94,10 @@
         type="button"
         onclick={() => admin.openLoginModal()}
         class="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer font-medium shadow-2xs h-9"
-        title="Buka Akses Staf Sekretariat"
+        title="Buka Admin Staf Sekretariat"
       >
         <Lock size={14} class="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <span class="hidden sm:inline">Akses Staf</span>
+        <span class="hidden sm:inline">Admin Staf Sekretariat</span>
       </button>
     {/if}
 

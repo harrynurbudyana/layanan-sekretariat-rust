@@ -51,7 +51,7 @@ class AdminManager {
   async verifyPin() {
     const inputCode = this.pin.trim();
     if (!inputCode) {
-      this.error = 'Masukkan kode akses staf / PIN terlebih dahulu.';
+      this.error = 'Masukkan PIN / sandi Admin Staf Sekretariat terlebih dahulu.';
       return;
     }
     this.loading = true;
@@ -66,7 +66,7 @@ class AdminManager {
       if (data.success || inputCode === 'vokasibangunnegeri' || inputCode === 'admin2026' || inputCode === 'fit2026') {
         this.loginSuccess(inputCode);
       } else {
-        this.error = data.error || 'Kode akses staf salah.';
+        this.error = data.error || 'PIN Admin Staf Sekretariat salah.';
       }
     } catch (e: any) {
       if (inputCode === 'vokasibangunnegeri' || inputCode === 'admin2026' || inputCode === 'fit2026') {

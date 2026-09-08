@@ -45,6 +45,7 @@
   let formUnitName = $state('');
   let formApplicantName = $state('');
   let formApplicantPhone = $state('');
+  let formApplicantEmail = $state('');
   let formParticipantCount = $state(15);
   let formFacilityNotes = $state('');
 
@@ -141,12 +142,20 @@
     try {
       const headers = admin.getAuthHeaders();
       const [rRes, bRes] = await Promise.all([
-        fetch('/api/rooms').then(r => r.json()),
-        fetch('/api/rooms/bookings', { headers }).then(r => r.json())
+        fetch('/api/rooms').then(async r => {
+          if (!r.ok) return [];
+          const data = await r.json();
+          return Array.isArray(data) ? data : [];
+        }).catch(() => []),
+        fetch('/api/rooms/bookings', { headers }).then(async r => {
+          if (!r.ok) return [];
+          const data = await r.json();
+          return Array.isArray(data) ? data : [];
+        }).catch(() => [])
       ]);
       rooms = rRes;
       bookings = bRes;
-      if (rooms.length > 0 && !formRoomId) {
+      if (rooms.length > 0 && (!formRoomId || !rooms.some(r => r.id === formRoomId))) {
         formRoomId = rooms[0].id;
       }
     } catch (e) {
@@ -200,8 +209,13 @@
 
   async function handleBookingSubmit(e: Event) {
     e.preventDefault();
-    if (!formPurpose.trim() || !formUnitName.trim() || !formApplicantName.trim()) {
-      submitError = 'Harap isi semua field bertanda bintang (*).';
+    if (!formPurpose.trim() || !formUnitName.trim() || !formApplicantName.trim() || !formApplicantPhone.trim() || !formApplicantEmail.trim()) {
+      submitError = 'Harap isi semua field wajib bertanda bintang (*), termasuk Nomor WhatsApp dan Email Pemohon.';
+      return;
+    }
+
+    if (!formApplicantEmail.includes('@') || !formApplicantEmail.includes('.')) {
+      submitError = 'Format email pemohon tidak valid.';
       return;
     }
 
@@ -221,6 +235,7 @@
           unit_name: formUnitName.trim(),
           applicant_name: formApplicantName.trim(),
           applicant_phone: formApplicantPhone.trim(),
+          applicant_email: formApplicantEmail.trim() || null,
           participant_count: formParticipantCount,
           facility_notes: formFacilityNotes.trim() || null
         })
@@ -241,6 +256,13 @@
   }
 
   async function updateStatus(bookingId: string, status: string) {
+    let notes: string | null = null;
+    if (status === 'REJECTED') {
+      const inputReason = prompt('Masukkan alasan penolakan (opsional, akan dikirimkan ke email pemohon):');
+      if (inputReason === null) return; // Batal klik
+      notes = inputReason.trim() || null;
+    }
+
     try {
       const headers = {
         'Content-Type': 'application/json',
@@ -249,7 +271,7 @@
       const res = await fetch(`/api/rooms/bookings/${bookingId}/status`, {
         method: 'PUT',
         headers,
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, notes })
       });
       const data = await res.json();
       if (data.success) {
@@ -594,27 +616,44 @@
             </div>
           </div>
 
-          <!-- Phone & Participant Count -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Phone, Email & Participant Count -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label for="booking-pic-phone" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Nomor WhatsApp PIC
+                Nomor WhatsApp PIC <span class="text-red-500">*</span>
               </label>
               <input
                 id="booking-pic-phone"
-                type="text"
+                type="tel"
+                required
                 bind:value={formApplicantPhone}
                 placeholder="081234567890"
                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
               />
             </div>
             <div>
+              <label for="booking-pic-email" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                <span>Email Pemohon <span class="text-red-500">*</span></span>
+                <span class="text-[10px] text-slate-400 font-normal">Notifikasi</span>
+              </label>
+              <input
+                id="booking-pic-email"
+                type="email"
+                required
+                bind:value={formApplicantEmail}
+                placeholder="nama@telkomuniversity.ac.id"
+                class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
+              />
+            </div>
+            <div>
               <label for="booking-participant-count" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Perkiraan Jumlah Peserta
+                Jumlah Peserta <span class="text-red-500">*</span>
               </label>
               <input
                 id="booking-participant-count"
                 type="number"
+                min="1"
+                required
                 bind:value={formParticipantCount}
                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
               />
@@ -685,16 +724,16 @@
           <Lock class="w-7 h-7" />
         </div>
         <div>
-          <h3 class="text-base font-bold text-slate-900 dark:text-white">Akses Terbatas Staf Sekretariat</h3>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Akses Terbatas Admin Staf Sekretariat</h3>
           <p class="text-xs text-slate-500 mt-1 leading-relaxed">
-            Daftar agenda peminjaman ruangan bersifat rahasia internal dan hanya dapat diakses oleh staf Sekretariat FIT.
+            Daftar agenda peminjaman ruangan bersifat rahasia internal dan hanya dapat diakses oleh Admin Staf Sekretariat FIT.
           </p>
         </div>
         <button
           onclick={() => admin.openLoginModal()}
           class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm transition-colors"
         >
-          Masuk Akses Staf
+          Masuk Admin Staf Sekretariat
         </button>
       </div>
     {:else}
@@ -703,7 +742,7 @@
           <div class="flex items-center gap-2">
             <h2 class="text-base font-bold text-slate-900 dark:text-white">Daftar Pengajuan Peminjaman Ruangan</h2>
             <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
-              Khusus Staf
+              Khusus Admin Staf
             </span>
           </div>
           <div class="flex items-center gap-2">
@@ -727,8 +766,8 @@
             <div>
               <div class="flex items-center gap-2 mb-1">
                 <span class="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">{booking.booking_number}</span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase {booking.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : booking.status === 'REJECTED' ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400' : 'bg-slate-200 text-slate-700'}">
-                  {booking.status}
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase {booking.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : booking.status === 'REJECTED' ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'}">
+                  {booking.status === 'CONFIRMED' ? 'Disetujui' : booking.status === 'REJECTED' ? 'Ditolak' : 'Menunggu Approval'}
                 </span>
               </div>
               <h4 class="text-sm font-bold text-slate-900 dark:text-white">{booking.room_name} - {booking.purpose}</h4>
@@ -779,20 +818,36 @@
   {#if submitSuccess}
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
       <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
-        <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center">
-          <Check class="w-7 h-7" />
+        <div class="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 mx-auto flex items-center justify-center">
+          <Clock class="w-7 h-7" />
         </div>
         <h3 class="text-lg font-black text-slate-900 dark:text-white">Peminjaman Berhasil Diajukan!</h3>
+        <span class="inline-block px-3 py-1 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 rounded-full text-xs font-bold">
+          Menunggu Persetujuan Staf Sekretariat
+        </span>
         <p class="text-xs text-slate-500">Nomor Registrasi Booking:</p>
         <div class="font-mono text-base font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800">
           {submitSuccess.bookingNumber}
         </div>
-        <p class="text-xs text-slate-500">
-          Jadwal penggunaan telah terdaftar pada sistem dan slot waktu terkunci.
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Permohonan peminjaman telah masuk ke antrean staf sekretariat untuk direview dan disetujui.
+          {#if formApplicantEmail}
+            <span class="block mt-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+              Notifikasi status telah dikirimkan ke email <strong>{formApplicantEmail}</strong>.
+            </span>
+          {/if}
         </p>
         <div class="pt-2">
           <button
-            onclick={() => { submitSuccess = null; activeTab = 'schedule'; }}
+            onclick={() => {
+              submitSuccess = null;
+              formApplicantEmail = '';
+              formPurpose = '';
+              formApplicantName = '';
+              formApplicantPhone = '';
+              formFacilityNotes = '';
+              activeTab = 'schedule';
+            }}
             class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md shadow-amber-500/20"
           >
             Selesai & Lihat Jadwal
