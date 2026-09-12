@@ -17,9 +17,9 @@
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Buat Nomor Surat', href: '/generator', icon: FilePlus2, badge: 'Instan' },
-    { name: 'Buku Agenda Surat', href: '/agenda', icon: BookOpenCheck, badge: 'Sekretariat' },
-    { name: 'Peminjaman Ruangan', href: '/ruangan', icon: CalendarDays, badge: 'Baru' },
+    { name: 'Buat Nomor Surat', href: '/generator', icon: FilePlus2 },
+    { name: 'Buku Agenda Surat', href: '/agenda', icon: BookOpenCheck },
+    { name: 'Peminjaman Ruangan', href: '/ruangan', icon: CalendarDays },
     { name: 'Panduan Format', href: '/panduan', icon: HelpCircle },
     { name: 'Master Data', href: '/master', icon: Database },
   ];
@@ -44,18 +44,18 @@
   }
 </script>
 
-<aside class="w-64 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex flex-col h-full border-r border-slate-200 dark:border-slate-800 shrink-0 select-none transition-colors duration-200">
+<aside class="w-full md:w-72 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex flex-col h-full border-r border-slate-200 dark:border-slate-800 shrink-0 select-none transition-colors duration-200">
   <!-- Brand Header -->
-  <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-    <div class="flex items-center gap-3">
+  <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
       <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center font-bold text-white shadow-md shadow-red-500/20 shrink-0">
         <Building2 class="h-5 w-5 text-white" />
       </div>
-      <div>
-        <h1 class="font-bold text-base leading-tight tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
+      <div class="min-w-0">
+        <h1 class="font-bold text-base leading-tight tracking-tight text-slate-900 dark:text-white truncate">
           FIT E-Office
         </h1>
-        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
           Fakultas Ilmu Terapan
         </p>
       </div>
@@ -65,7 +65,7 @@
     <button
       type="button"
       onclick={handleCollapse}
-      class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+      class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
       title="Sembunyikan Sidebar"
       aria-label="Sembunyikan Sidebar"
     >
@@ -86,27 +86,19 @@
         type="button"
         onclick={() => handleNav(item.href)}
         class={cn(
-          "w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group cursor-pointer text-left",
+          "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group cursor-pointer text-left",
           isActive
             ? "bg-red-50 dark:bg-red-600/15 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 font-semibold shadow-xs"
             : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
         )}
       >
-        <div class="flex items-center gap-3">
-          <Icon
-            class={cn(
-              "h-4.5 w-4.5 transition-colors",
-              isActive ? "text-red-600 dark:text-red-400" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"
-            )}
-          />
-          <span>{item.name}</span>
-        </div>
-
-        {#if item.badge}
-          <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
-            {item.badge}
-          </span>
-        {/if}
+        <Icon
+          class={cn(
+            "h-4.5 w-4.5 shrink-0 transition-colors",
+            isActive ? "text-red-600 dark:text-red-400" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"
+          )}
+        />
+        <span class="truncate whitespace-nowrap">{item.name}</span>
       </button>
     {/each}
   </div>
