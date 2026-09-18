@@ -10,9 +10,12 @@
     Sun, 
     Moon,
     PanelLeftClose,
-    PanelLeftOpen
+    PanelLeftOpen,
+    User,
+    History
   } from 'lucide-svelte';
   import { theme } from '../lib/theme.svelte';
+  import { auth } from '../lib/auth.svelte';
   import { admin } from '../lib/admin.svelte';
   import { router } from '../lib/router.svelte';
   import { sidebarState } from '../lib/sidebar.svelte';
@@ -75,16 +78,45 @@
       {/if}
     </button>
 
-    <!-- Admin Status / Login -->
-    {#if admin.isAdmin}
-      <div class="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-2xs h-9">
-        <ShieldCheck size={16} class="w-4 h-4 text-emerald-600 shrink-0" />
+    <!-- Google Auth Status / Login -->
+    {#if auth.isAdmin}
+      <div class="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-2xs h-9">
+        {#if auth.user?.picture}
+          <img src={auth.user.picture} alt="" class="w-5 h-5 rounded-full object-cover shrink-0" />
+        {:else}
+          <ShieldCheck size={16} class="w-4 h-4 text-emerald-600 shrink-0" />
+        {/if}
         <span class="hidden sm:inline">Staf Sekretariat</span>
         <button
           type="button"
-          onclick={() => admin.logout()}
-          title="Kunci / Keluar Admin Staf Sekretariat"
+          onclick={() => auth.logout()}
+          title="Keluar dari Staf Sekretariat"
           class="ml-1 sm:ml-2 p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40"
+        >
+          <LogOut size={14} class="w-3.5 h-3.5 shrink-0" />
+        </button>
+      </div>
+    {:else if auth.isLoggedIn}
+      <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 shadow-2xs h-9">
+        {#if auth.user?.picture}
+          <img src={auth.user.picture} alt="" class="w-5 h-5 rounded-full object-cover shrink-0" />
+        {:else}
+          <User size={15} class="w-3.5 h-3.5 text-slate-500 shrink-0" />
+        {/if}
+        <span class="hidden md:inline max-w-[100px] truncate">{auth.user?.name}</span>
+        <button
+          type="button"
+          onclick={() => router.navigate('/histori')}
+          title="Buka Histori Pengajuan Saya"
+          class="ml-0.5 px-2 py-0.5 text-[11px] font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+        >
+          Histori
+        </button>
+        <button
+          type="button"
+          onclick={() => auth.logout()}
+          title="Keluar / Logout"
+          class="p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40"
         >
           <LogOut size={14} class="w-3.5 h-3.5 shrink-0" />
         </button>
@@ -92,12 +124,18 @@
     {:else}
       <button
         type="button"
-        onclick={() => admin.openLoginModal()}
-        class="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer font-medium shadow-2xs h-9"
-        title="Buka Admin Staf Sekretariat"
+        onclick={() => auth.openLoginModal()}
+        class="inline-flex items-center gap-2 text-xs text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-700/80 transition-all cursor-pointer font-semibold shadow-2xs h-9"
+        title="Masuk dengan Akun Google"
       >
-        <Lock size={14} class="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <span class="hidden sm:inline">Admin Staf Sekretariat</span>
+        <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span class="hidden sm:inline">Masuk dengan Google</span>
+        <span class="sm:hidden">Masuk</span>
       </button>
     {/if}
 

@@ -19,9 +19,12 @@
     Search,
     ChevronDown,
     X,
-    Tag
+    Tag,
+    ExternalLink,
+    Inbox
   } from 'lucide-svelte';
   import { admin } from '../lib/admin.svelte';
+  import { auth } from '../lib/auth.svelte';
   import { router } from '../lib/router.svelte';
   import { formatDateIndo } from '../lib/utils';
 
@@ -45,6 +48,14 @@
   let applicantEmail = $state('');
   let letterDate = $state(new Date().toISOString().slice(0, 10));
   let notes = $state('');
+
+  // Auto-fill from logged-in Google profile
+  $effect(() => {
+    if (auth.isLoggedIn && auth.user) {
+      if (!applicantEmail) applicantEmail = auth.user.email;
+      if (!applicantName) applicantName = auth.user.name;
+    }
+  });
 
   // Manual Mode specific
   let manualSequence = $state<number | null>(null);
@@ -420,7 +431,7 @@
 
         const res = await fetch('/api/letters/generate-batch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
           body: JSON.stringify({
             count: batchCount,
             unit_id: unitId,
@@ -447,7 +458,7 @@
       } else {
         const res = await fetch('/api/letters/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...auth.getAuthHeaders() },
           body: JSON.stringify({
             is_manual: mode === 'manual',
             manual_sequence_number: mode === 'manual' ? manualSequence : null,
@@ -521,7 +532,8 @@
     subject = '';
     recipient = '';
     applicantContact = '';
-    applicantEmail = '';
+    applicantEmail = auth.user?.email || '';
+    applicantName = auth.user?.name || '';
     notes = '';
     manualFullNumber = '';
     manualSequence = null;
@@ -578,7 +590,48 @@
       <Lock class="h-3.5 w-3.5 {mode === 'manual' ? 'text-white' : 'text-amber-500'}" />
       <span>Mode Manual (Admin)</span>
     </button>
+
+    <!-- Tab 4: Shortcut Registrasi Surat Masuk -->
+    {#if admin.isAdmin}
+      <button
+        type="button"
+        onclick={() => router.navigate('/agenda')}
+        title="Buka Buku Agenda untuk Registrasi Surat Masuk"
+        class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all cursor-pointer border border-emerald-200 dark:border-emerald-800 shrink-0"
+      >
+        <Inbox class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+        <span>Surat Masuk</span>
+      </button>
+    {/if}
   </div>
+
+  <!-- User Logged In Info Banner -->
+  {#if auth.isLoggedIn}
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs">
+      <div class="flex items-center gap-2.5">
+        {#if auth.user?.picture}
+          <img src={auth.user.picture} alt="" class="w-7 h-7 rounded-full shrink-0 ring-1 ring-slate-200 dark:ring-slate-700" />
+        {:else}
+          <div class="w-7 h-7 rounded-full bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center font-bold text-xs shrink-0">
+            {auth.user?.name ? auth.user.name[0].toUpperCase() : 'U'}
+          </div>
+        {/if}
+        <div>
+          <span class="text-slate-500 dark:text-slate-400">Masuk sebagai: </span>
+          <strong class="text-slate-900 dark:text-white font-bold">{auth.user?.name}</strong>
+          <span class="text-slate-400 font-mono text-[11px] ml-1">({auth.user?.email})</span>
+        </div>
+      </div>
+      <button
+        type="button"
+        onclick={() => router.navigate('/histori')}
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold cursor-pointer shadow-2xs transition-colors shrink-0"
+      >
+        <span>Lihat Histori Nomor Surat Saya</span>
+        <ExternalLink class="w-3.5 h-3.5" />
+      </button>
+    </div>
+  {/if}
 
   <!-- SINGLE SUCCESS BANNER -->
   {#if successResult}

@@ -7,7 +7,8 @@
     HelpCircle, 
     Database, 
     Building2,
-    PanelLeftClose
+    PanelLeftClose,
+    History
   } from 'lucide-svelte';
   import { router } from '../lib/router.svelte';
   import { sidebarState } from '../lib/sidebar.svelte';
@@ -20,6 +21,7 @@
     { name: 'Buat Nomor Surat', href: '/generator', icon: FilePlus2 },
     { name: 'Buku Agenda Surat', href: '/agenda', icon: BookOpenCheck },
     { name: 'Peminjaman Ruangan', href: '/ruangan', icon: CalendarDays },
+    { name: 'Histori Saya', href: '/histori', icon: History },
     { name: 'Panduan Format', href: '/panduan', icon: HelpCircle },
     { name: 'Master Data', href: '/master', icon: Database },
   ];

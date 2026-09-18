@@ -21,9 +21,13 @@
     Eye,
     EyeOff,
     Sparkles,
-    Info
+    Info,
+    History,
+    ExternalLink
   } from 'lucide-svelte';
   import { admin } from '../lib/admin.svelte';
+  import { auth } from '../lib/auth.svelte';
+  import { router } from '../lib/router.svelte';
   import { formatDateIndo } from '../lib/utils';
 
   let rooms = $state<any[]>([]);
@@ -48,6 +52,14 @@
   let formApplicantEmail = $state('');
   let formParticipantCount = $state(15);
   let formFacilityNotes = $state('');
+
+  // Auto-fill from logged-in Google profile
+  $effect(() => {
+    if (auth.isLoggedIn && auth.user) {
+      if (!formApplicantEmail) formApplicantEmail = auth.user.email;
+      if (!formApplicantName) formApplicantName = auth.user.name;
+    }
+  });
 
   // Conflict Check
   let checkingAvailability = $state(false);
@@ -326,11 +338,48 @@
           class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 {activeTab === 'list' ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}"
         >
           <ShieldCheck class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-          <span>Daftar Booking ({bookings.length})</span>
+          <span>Kelola Booking Admin ({bookings.length})</span>
+        </button>
+      {/if}
+      {#if auth.isLoggedIn}
+        <button
+          onclick={() => router.navigate('/histori')}
+          class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+        >
+          <History class="w-3.5 h-3.5 text-blue-500" />
+          <span>Pengajuan Saya</span>
         </button>
       {/if}
     </div>
   </div>
+
+  <!-- Logged in user info banner -->
+  {#if auth.isLoggedIn}
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs">
+      <div class="flex items-center gap-2.5">
+        {#if auth.user?.picture}
+          <img src={auth.user.picture} alt="" class="w-7 h-7 rounded-full shrink-0 ring-1 ring-slate-200 dark:ring-slate-700" />
+        {:else}
+          <div class="w-7 h-7 rounded-full bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center font-bold text-xs shrink-0">
+            {auth.user?.name ? auth.user.name[0].toUpperCase() : 'U'}
+          </div>
+        {/if}
+        <div>
+          <span class="text-slate-500 dark:text-slate-400">Masuk sebagai: </span>
+          <strong class="text-slate-900 dark:text-white font-bold">{auth.user?.name}</strong>
+          <span class="text-slate-400 font-mono text-[11px] ml-1">({auth.user?.email})</span>
+        </div>
+      </div>
+      <button
+        type="button"
+        onclick={() => router.navigate('/histori')}
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold cursor-pointer shadow-2xs transition-colors shrink-0"
+      >
+        <span>Lihat Histori Pengajuan Saya</span>
+        <ExternalLink class="w-3.5 h-3.5" />
+      </button>
+    </div>
+  {/if}
 
   <!-- TAB 1: SCHEDULE TIMELINE (SLOT KOSONG) -->
   {#if activeTab === 'schedule'}
@@ -845,9 +894,9 @@
           <button
             onclick={() => {
               submitSuccess = null;
-              formApplicantEmail = '';
+              formApplicantEmail = auth.user?.email || '';
+              formApplicantName = auth.user?.name || '';
               formPurpose = '';
-              formApplicantName = '';
               formApplicantPhone = '';
               formFacilityNotes = '';
               activeTab = 'schedule';

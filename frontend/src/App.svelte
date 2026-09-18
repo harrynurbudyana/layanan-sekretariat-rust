@@ -8,6 +8,7 @@
   import RuanganView from './views/RuanganView.svelte';
   import MasterView from './views/MasterView.svelte';
   import PanduanView from './views/PanduanView.svelte';
+  import HistoriView from './views/HistoriView.svelte';
   import { router } from './lib/router.svelte';
   import { sidebarState } from './lib/sidebar.svelte';
 </script>
@@ -30,6 +31,8 @@
         <AgendaView />
       {:else if router.currentPath === '/ruangan'}
         <RuanganView />
+      {:else if router.currentPath === '/histori'}
+        <HistoriView />
       {:else if router.currentPath === '/master'}
         <MasterView />
       {:else if router.currentPath === '/panduan'}

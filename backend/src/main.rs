@@ -106,6 +106,12 @@ struct LetterResponse {
     unit_name: Option<String>,
     #[sqlx(rename = "categoryName")]
     category_name: Option<String>,
+    #[sqlx(default, rename = "letterType")]
+    letter_type: Option<String>,
+    #[sqlx(default)]
+    sender: Option<String>,
+    #[sqlx(default, rename = "receivedDate")]
+    received_date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,6 +134,20 @@ struct GenerateLetterInput {
 }
 
 #[derive(Debug, Deserialize)]
+struct CreateIncomingLetterInput {
+    manual_sequence_number: Option<i64>,
+    full_number: String,
+    sender: String,
+    letter_date: String,
+    received_date: Option<String>,
+    subject: String,
+    recipient: Option<String>,
+    unit_id: String,
+    category_id: String,
+    notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct UpdateLetterInput {
     subject: Option<String>,
     recipient: Option<String>,
@@ -135,6 +155,8 @@ struct UpdateLetterInput {
     applicant_contact: Option<String>,
     status: Option<String>,
     notes: Option<String>,
+    sender: Option<String>,
+    received_date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -237,6 +259,8 @@ struct LetterFilters {
     unit_id: Option<String>,
     category_id: Option<String>,
     status: Option<String>,
+    my_only: Option<bool>,
+    letter_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -247,11 +271,50 @@ struct BookingFilters {
     date_str: Option<String>,
     room_id: Option<String>,
     status: Option<String>,
+    my_only: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
 struct AdminVerifyInput {
     pin: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+struct AuthSession {
+    token: String,
+    email: String,
+    name: String,
+    picture: Option<String>,
+    role: String,
+    #[sqlx(rename = "createdAt")]
+    created_at: Option<String>,
+    #[sqlx(rename = "expiresAt")]
+    expires_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct UserProfile {
+    email: String,
+    name: String,
+    picture: Option<String>,
+    role: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleAuthInput {
+    credential: Option<String>,
+    id_token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct GoogleTokenInfo {
+    email: Option<String>,
+    #[serde(default)]
+    email_verified: Option<serde_json::Value>,
+    name: Option<String>,
+    picture: Option<String>,
+    aud: Option<String>,
 }
 
 // Helper Roman Month
@@ -300,8 +363,12 @@ fn resolve_sqlite_url(url: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if std::path::Path::new("backend/.env").exists() {
+        let _ = dotenvy::from_path("backend/.env");
+    }
     dotenvy::dotenv().ok();
-    let _ = dotenvy::from_path("backend/.env");
+    let _ = dotenvy::from_path("backend/.env.example");
+    let _ = dotenvy::from_path(".env.example");
 
     tracing_subscriber::registry()
         .with(
@@ -327,6 +394,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .execute(&dev_pool)
         .await;
 
+    let _ = sqlx::query(r#"ALTER TABLE "LetterRequest" ADD COLUMN letterType TEXT NOT NULL DEFAULT 'OUTGOING'"#)
+        .execute(&dev_pool)
+        .await;
+
+    let _ = sqlx::query(r#"ALTER TABLE "LetterRequest" ADD COLUMN sender TEXT"#)
+        .execute(&dev_pool)
+        .await;
+
+    let _ = sqlx::query(r#"ALTER TABLE "LetterRequest" ADD COLUMN receivedDate TEXT"#)
+        .execute(&dev_pool)
+        .await;
+
+    let _ = sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS "AuthSession" (
+            token TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            name TEXT NOT NULL,
+            picture TEXT,
+            role TEXT NOT NULL,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expiresAt DATETIME NOT NULL
+        )
+        "#,
+    )
+    .execute(&dev_pool)
+    .await;
+
     let rooms_pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect(&rooms_db_url)
@@ -350,6 +445,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health_check))
         .route("/stats", get(get_dashboard_stats))
         .route("/admin/verify", post(verify_admin_pin))
+        // Auth
+        .route("/auth/config", get(get_auth_config))
+        .route("/auth/google", post(auth_google))
+        .route("/auth/me", get(get_auth_me))
+        .route("/auth/logout", post(auth_logout))
         // Units
         .route("/units", get(get_units).post(create_unit))
         .route("/units/{id}", put(update_unit).delete(delete_unit))
@@ -359,6 +459,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/categories/{id}", put(update_category).delete(delete_category))
         // Letters
         .route("/letters", get(get_letters))
+        .route("/letters/next-sequence", get(get_next_letter_sequence))
+        .route("/letters/incoming", post(create_incoming_letter))
         .route("/letters/generate", post(generate_letter))
         .route("/letters/generate-batch", post(generate_batch_letters))
         .route("/agenda/verify-password", post(verify_agenda_password))
@@ -415,6 +517,165 @@ async fn health_check() -> impl IntoResponse {
     }))
 }
 
+// Helper functions for Auth & RBAC
+fn is_admin_email(email: &str) -> bool {
+    let email_clean = email.trim().to_lowercase();
+    if email_clean == "sekretariat@tass.telkomuniversity.ac.id" {
+        return true;
+    }
+    let admin_emails_env = std::env::var("ADMIN_EMAILS").unwrap_or_default();
+    admin_emails_env
+        .split(',')
+        .map(|s| s.trim().to_lowercase())
+        .any(|s| !s.is_empty() && s == email_clean)
+}
+
+fn extract_token(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| {
+            if let Some(stripped) = h.strip_prefix("Bearer ") {
+                Some(stripped)
+            } else if let Some(stripped) = h.strip_prefix("bearer ") {
+                Some(stripped)
+            } else {
+                None
+            }
+        })
+        .map(|s| s.trim().to_string())
+        .or_else(|| {
+            headers
+                .get("x-auth-token")
+                .and_then(|h| h.to_str().ok())
+                .map(|s| s.trim().to_string())
+        })
+}
+
+async fn get_current_user(headers: &HeaderMap, pool: &SqlitePool) -> Option<UserProfile> {
+    let token = extract_token(headers)?;
+    let row: Option<AuthSession> = sqlx::query_as(
+        r#"
+        SELECT token, email, name, picture, role, createdAt, expiresAt
+        FROM "AuthSession"
+        WHERE token = ? AND datetime('now') < expiresAt
+        LIMIT 1
+        "#,
+    )
+    .bind(&token)
+    .fetch_optional(pool)
+    .await
+    .ok()?;
+
+    row.map(|s| UserProfile {
+        email: s.email,
+        name: s.name,
+        picture: s.picture,
+        role: s.role,
+    })
+}
+
+// ------------------------------------------
+// AUTH HANDLERS
+// ------------------------------------------
+
+async fn get_auth_config() -> impl IntoResponse {
+    let client_id = std::env::var("GOOGLE_CLIENT_ID").ok().filter(|s| !s.trim().is_empty());
+    let admin_emails = std::env::var("ADMIN_EMAILS").unwrap_or_else(|_| "sekretariat@tass.telkomuniversity.ac.id".to_string());
+    Json(serde_json::json!({
+        "googleClientId": client_id,
+        "adminEmails": admin_emails,
+    }))
+}
+
+async fn auth_google(
+    State(state): State<AppState>,
+    Json(input): Json<GoogleAuthInput>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let id_token = match input.credential.or(input.id_token) {
+        Some(t) if !t.trim().is_empty() => t.trim().to_string(),
+        _ => return Err((StatusCode::BAD_REQUEST, "Token ID Google wajib disertakan.".to_string())),
+    };
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("https://oauth2.googleapis.com/tokeninfo?id_token={}", id_token))
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Gagal memverifikasi token Google: {e}")))?;
+
+    if !resp.status().is_success() {
+        return Err((StatusCode::UNAUTHORIZED, "Token Google tidak valid atau telah kedaluwarsa.".to_string()));
+    }
+
+    let info: GoogleTokenInfo = resp
+        .json()
+        .await
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Format respon token Google tidak valid: {e}")))?;
+
+    let email = info.email.ok_or((StatusCode::BAD_REQUEST, "Email tidak ditemukan pada akun Google Anda.".to_string()))?;
+    let role = if is_admin_email(&email) { "admin" } else { "user" };
+    let session_token = format!("sess_{}", Uuid::new_v4().simple());
+    let user_name = info.name.unwrap_or_else(|| email.split('@').next().unwrap_or("Pengguna").to_string());
+
+    sqlx::query(
+        r#"
+        INSERT INTO "AuthSession" (token, email, name, picture, role, createdAt, expiresAt)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now', '+30 days'))
+        "#,
+    )
+    .bind(&session_token)
+    .bind(&email)
+    .bind(&user_name)
+    .bind(&info.picture)
+    .bind(role)
+    .execute(&state.dev_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "token": session_token,
+        "user": {
+            "email": email,
+            "name": user_name,
+            "picture": info.picture,
+            "role": role,
+        }
+    })))
+}
+
+async fn get_auth_me(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Some(user) = get_current_user(&headers, &state.dev_pool).await {
+        Json(serde_json::json!({
+            "authenticated": true,
+            "user": user,
+        }))
+    } else {
+        Json(serde_json::json!({
+            "authenticated": false,
+            "user": null,
+        }))
+    }
+}
+
+async fn auth_logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let token = extract_token(&headers);
+    if let Some(t) = token {
+        let _ = sqlx::query(r#"DELETE FROM "AuthSession" WHERE token = ?"#)
+            .bind(t)
+            .execute(&state.dev_pool)
+            .await;
+    }
+    Json(serde_json::json!({ "success": true, "message": "Logout berhasil" }))
+}
+
 async fn verify_admin_pin(
     Json(input): Json<AdminVerifyInput>,
 ) -> impl IntoResponse {
@@ -422,12 +683,12 @@ async fn verify_admin_pin(
     if pin == "admin2026" || pin == "fit2026" || pin == "vokasibangunnegeri" {
         Json(serde_json::json!({
             "success": true,
-            "message": "PIN admin valid"
+            "message": "PIN admin valid (Disarankan migrasi ke Google Sign-In sekretariat@tass.telkomuniversity.ac.id)"
         }))
     } else {
         Json(serde_json::json!({
             "success": false,
-            "error": "PIN yang Anda masukkan salah."
+            "error": "PIN salah. Silakan login menggunakan Google Sign-In akun sekretariat@tass.telkomuniversity.ac.id."
         }))
     }
 }
@@ -476,10 +737,11 @@ async fn get_dashboard_stats(
         SELECT 
             l.id, l.sequenceNumber, l.monthRomawi, l.month, l.year, l.fullNumber,
             l.classificationCode, l.signeeCode, l.subject, l.recipient,
-            l.applicantName, l.applicantContact, CASE WHEN typeof(l.letterDate) = 'integer' THEN date(l.letterDate / 1000, 'unixepoch') ELSE l.letterDate END as letterDate, l.status, l.isManual, l.notes,
+            l.applicantName, l.applicantContact, l.applicantEmail, CASE WHEN typeof(l.letterDate) = 'integer' THEN date(l.letterDate / 1000, 'unixepoch') ELSE l.letterDate END as letterDate, l.status, l.isManual, l.notes,
             l.unitId, l.categoryId,
             u.name as unitName,
-            c.name as categoryName
+            c.name as categoryName,
+            l.letterType, l.sender, l.receivedDate
         FROM "LetterRequest" l
         LEFT JOIN "Unit" u ON l.unitId = u.id
         LEFT JOIN "LetterCategory" c ON l.categoryId = c.id
@@ -615,8 +877,14 @@ async fn get_units(
 
 async fn create_unit(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(input): Json<CreateUnitInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Pengelolaan data unit hanya diizinkan untuk Staf Sekretariat.".to_string()));
+    }
+
     let id = format!("cmt_{}", Uuid::new_v4().simple());
     let signee_code = input.signee_code.unwrap_or_else(|| "IT-DEK".to_string());
     let category = input.category.unwrap_or_else(|| "PRODI".to_string());
@@ -643,9 +911,15 @@ async fn create_unit(
 
 async fn update_unit(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(input): Json<CreateUnitInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Pengelolaan data unit hanya diizinkan untuk Staf Sekretariat.".to_string()));
+    }
+
     let signee_code = input.signee_code.unwrap_or_else(|| "IT-DEK".to_string());
     let category = input.category.unwrap_or_else(|| "PRODI".to_string());
 
@@ -670,8 +944,14 @@ async fn update_unit(
 
 async fn delete_unit(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Pengelolaan data unit hanya diizinkan untuk Staf Sekretariat.".to_string()));
+    }
+
     // Cek apakah ada surat terkait
     let count: (i64,) = sqlx::query_as(r#"SELECT count(id) FROM "LetterRequest" WHERE unitId = ?"#)
         .bind(&id)
@@ -717,8 +997,14 @@ async fn get_categories(
 
 async fn create_category(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(input): Json<CreateCategoryInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Pengelolaan kategori surat hanya diizinkan untuk Staf Sekretariat.".to_string()));
+    }
+
     let id = format!("cmt_{}", Uuid::new_v4().simple());
     let group = input.group.unwrap_or_else(|| "AKD".to_string());
 
@@ -744,9 +1030,15 @@ async fn create_category(
 
 async fn update_category(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(input): Json<CreateCategoryInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Pengelolaan kategori surat hanya diizinkan untuk Staf Sekretariat.".to_string()));
+    }
+
     let group = input.group.unwrap_or_else(|| "AKD".to_string());
 
     sqlx::query(
@@ -770,8 +1062,14 @@ async fn update_category(
 
 async fn delete_category(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Pengelolaan kategori surat hanya diizinkan untuk Staf Sekretariat.".to_string()));
+    }
+
     let count: (i64,) = sqlx::query_as(r#"SELECT count(id) FROM "LetterRequest" WHERE categoryId = ?"#)
         .bind(&id)
         .fetch_one(&state.dev_pool)
@@ -839,20 +1137,23 @@ struct LettersListResponse {
 
 async fn get_letters(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(filters): Query<LetterFilters>,
 ) -> Result<Json<LettersListResponse>, (StatusCode, String)> {
     let limit = filters.limit.unwrap_or(50);
     let offset = filters.offset.unwrap_or(0);
+    let user = get_current_user(&headers, &state.dev_pool).await;
 
     let mut sql = String::from(
         r#"
         SELECT 
             l.id, l.sequenceNumber, l.monthRomawi, l.month, l.year, l.fullNumber,
             l.classificationCode, l.signeeCode, l.subject, l.recipient,
-            l.applicantName, l.applicantContact, CASE WHEN typeof(l.letterDate) = 'integer' THEN date(l.letterDate / 1000, 'unixepoch') ELSE l.letterDate END as letterDate, l.status, l.isManual, l.notes,
+            l.applicantName, l.applicantContact, l.applicantEmail, CASE WHEN typeof(l.letterDate) = 'integer' THEN date(l.letterDate / 1000, 'unixepoch') ELSE l.letterDate END as letterDate, l.status, l.isManual, l.notes,
             l.unitId, l.categoryId,
             u.name as unitName,
-            c.name as categoryName
+            c.name as categoryName,
+            l.letterType, l.sender, l.receivedDate
         FROM "LetterRequest" l
         LEFT JOIN "Unit" u ON l.unitId = u.id
         LEFT JOIN "LetterCategory" c ON l.categoryId = c.id
@@ -862,12 +1163,38 @@ async fn get_letters(
 
     let mut count_sql = String::from(r#"SELECT count(l.id) FROM "LetterRequest" l WHERE 1=1"#);
 
+    if filters.my_only == Some(true) {
+        if let Some(ref u) = user {
+            let email_clean = u.email.trim().to_lowercase();
+            let part = format!(" AND lower(l.applicantEmail) = '{email_clean}'");
+            sql.push_str(&part);
+            count_sql.push_str(&part);
+        } else {
+            return Ok(Json(LettersListResponse {
+                letters: vec![],
+                total: 0,
+            }));
+        }
+    }
+
     if let Some(ref s) = filters.search
         && !s.trim().is_empty() {
-            let part = " AND (l.fullNumber LIKE ? OR l.subject LIKE ? OR l.applicantName LIKE ? OR l.recipient LIKE ?)";
+            let part = " AND (l.fullNumber LIKE ? OR l.subject LIKE ? OR l.applicantName LIKE ? OR l.recipient LIKE ? OR l.sender LIKE ?)";
             sql.push_str(part);
             count_sql.push_str(part);
         }
+
+    if let Some(ref lt) = filters.letter_type {
+        if lt.eq_ignore_ascii_case("INCOMING") {
+            let part = " AND l.letterType = 'INCOMING'";
+            sql.push_str(part);
+            count_sql.push_str(part);
+        } else if lt.eq_ignore_ascii_case("OUTGOING") {
+            let part = " AND (l.letterType = 'OUTGOING' OR l.letterType IS NULL)";
+            sql.push_str(part);
+            count_sql.push_str(part);
+        }
+    }
 
     if let Some(y) = filters.year {
         let part = format!(" AND l.year = {y}");
@@ -913,6 +1240,7 @@ async fn get_letters(
                 .bind(&pattern)
                 .bind(&pattern)
                 .bind(&pattern)
+                .bind(&pattern)
                 .fetch_one(&state.dev_pool)
                 .await
                 .unwrap_or((0,))
@@ -934,6 +1262,7 @@ async fn get_letters(
         if !s.trim().is_empty() {
             let pattern = format!("%{}%", s.trim());
             sqlx::query_as(AssertSqlSafe(sql.as_str()))
+                .bind(&pattern)
                 .bind(&pattern)
                 .bind(&pattern)
                 .bind(&pattern)
@@ -966,10 +1295,246 @@ async fn get_letters(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+struct NextSeqQuery {
+    year: Option<i64>,
+}
+
+async fn get_next_letter_sequence(
+    State(state): State<AppState>,
+    Query(params): Query<NextSeqQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let year: i64 = params.year.unwrap_or_else(|| Local::now().year() as i64);
+
+    let last_seq: Option<(i64,)> = sqlx::query_as(
+        r#"SELECT sequenceNumber FROM "LetterRequest" WHERE year = ? ORDER BY sequenceNumber DESC LIMIT 1"#,
+    )
+    .bind(year)
+    .fetch_optional(&state.dev_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let counter: Option<(i64,)> = sqlx::query_as(
+        r#"SELECT currentNumber FROM "LetterCounter" WHERE year = ? AND scope = 'FIT' LIMIT 1"#,
+    )
+    .bind(year)
+    .fetch_optional(&state.dev_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let last_db_seq = last_seq.map(|s| s.0).unwrap_or(0);
+    let counter_seq = counter.map(|c| c.0).unwrap_or(0);
+    let next_seq = last_db_seq.max(counter_seq) + 1;
+
+    Ok(Json(serde_json::json!({
+        "year": year,
+        "nextSequence": next_seq
+    })))
+}
+
+async fn create_incoming_letter(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<CreateIncomingLetterInput>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    let is_admin = user.as_ref().map(|u| u.role == "admin").unwrap_or(false);
+
+    if !is_admin {
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "error": "Akses ditolak: Registrasi surat masuk hanya dapat dilakukan oleh Staf Sekretariat (sekretariat@tass.telkomuniversity.ac.id)."
+        })));
+    }
+
+    let full_number = input.full_number.trim().to_string();
+    let sender = input.sender.trim().to_string();
+    let subject = input.subject.trim().to_string();
+    let unit_id = input.unit_id.trim().to_string();
+    let category_id = input.category_id.trim().to_string();
+
+    if full_number.is_empty() || sender.is_empty() || subject.is_empty() || unit_id.is_empty() || category_id.is_empty() {
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "error": "Nomor surat, asal pengirim, perihal, unit disposisi, dan kategori wajib diisi."
+        })));
+    }
+
+    let parsed_date = NaiveDate::parse_from_str(input.letter_date.trim(), "%Y-%m-%d")
+        .unwrap_or_else(|_| Local::now().date_naive());
+    let year = parsed_date.year() as i64;
+    let month = parsed_date.month() as i64;
+    let month_romawi = get_roman_month(parsed_date.month());
+
+    let received_date_str = input.received_date
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| &input.letter_date)
+        .trim()
+        .to_string();
+
+    let unit: Option<Unit> = sqlx::query_as(r#"SELECT id, name, code, signeeCode, leaderName, category FROM "Unit" WHERE id = ?"#)
+        .bind(&unit_id)
+        .fetch_optional(&state.dev_pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let unit = match unit {
+        Some(u) => u,
+        None => return Ok(Json(serde_json::json!({ "success": false, "error": "Unit yang dipilih tidak valid." }))),
+    };
+
+    let category: Option<LetterCategory> = sqlx::query_as(r#"SELECT id, name, code, "group", classificationCode, description, isActive FROM "LetterCategory" WHERE id = ?"#)
+        .bind(&category_id)
+        .fetch_optional(&state.dev_pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let category = match category {
+        Some(c) => c,
+        None => return Ok(Json(serde_json::json!({ "success": false, "error": "Kategori yang dipilih tidak valid." }))),
+    };
+
+    let mut tx = state.dev_pool.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Check duplicate fullNumber
+    let dup: Option<(String, String)> = sqlx::query_as(
+        r#"SELECT id, applicantName FROM "LetterRequest" WHERE fullNumber = ? LIMIT 1"#,
+    )
+    .bind(&full_number)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if let Some((_, applicant)) = dup {
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "error": format!("Nomor surat \"{}\" sudah terdaftar di buku agenda (tercatat: {}).", full_number, applicant)
+        })));
+    }
+
+    let final_seq = if let Some(custom_seq) = input.manual_sequence_number {
+        custom_seq
+    } else {
+        let last_seq: Option<(i64,)> = sqlx::query_as(
+            r#"SELECT sequenceNumber FROM "LetterRequest" WHERE year = ? ORDER BY sequenceNumber DESC LIMIT 1"#,
+        )
+        .bind(year)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let counter: Option<(i64,)> = sqlx::query_as(
+            r#"SELECT currentNumber FROM "LetterCounter" WHERE year = ? AND scope = 'FIT' LIMIT 1"#,
+        )
+        .bind(year)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let last_db_seq = last_seq.map(|s| s.0).unwrap_or(0);
+        let counter_seq = counter.map(|c| c.0).unwrap_or(0);
+        last_db_seq.max(counter_seq) + 1
+    };
+
+    let letter_id = format!("cmt_{}", Uuid::new_v4().simple());
+    let staff_name = user.as_ref().map(|u| u.name.clone()).unwrap_or_else(|| "Staf Sekretariat FIT".to_string());
+    let staff_email = user.as_ref().map(|u| u.email.clone()).unwrap_or_else(|| "sekretariat@tass.telkomuniversity.ac.id".to_string());
+    let letter_date_ts = parsed_date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis();
+
+    sqlx::query(
+        r#"
+        INSERT INTO "LetterRequest" (
+            id, sequenceNumber, monthRomawi, month, year, fullNumber,
+            classificationCode, signeeCode, subject, recipient,
+            applicantName, applicantContact, applicantEmail, letterDate, notes, isManual, status,
+            unitId, categoryId, createdAt, updatedAt,
+            letterType, sender, receivedDate
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, 1, 'ISSUED',
+            ?, ?, datetime('now'), datetime('now'),
+            'INCOMING', ?, ?
+        )
+        "#,
+    )
+    .bind(&letter_id)
+    .bind(final_seq)
+    .bind(month_romawi)
+    .bind(month)
+    .bind(year)
+    .bind(&full_number)
+    .bind(&category.classification_code)
+    .bind(&unit.signee_code)
+    .bind(&subject)
+    .bind(input.recipient.as_deref().map(|s| s.trim()))
+    .bind(&staff_name)
+    .bind(Option::<String>::None)
+    .bind(&staff_email)
+    .bind(letter_date_ts)
+    .bind(input.notes.as_deref().map(|s| s.trim()))
+    .bind(&unit.id)
+    .bind(&category.id)
+    .bind(&sender)
+    .bind(&received_date_str)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Update LetterCounter so subsequent letters (both outgoing and incoming) continue from this sequence
+    sqlx::query(
+        r#"
+        INSERT INTO "LetterCounter" (id, year, scope, currentNumber, updatedAt)
+        VALUES (?, ?, 'FIT', ?, datetime('now'))
+        ON CONFLICT(year, scope) DO UPDATE SET
+            currentNumber = max(currentNumber, excluded.currentNumber),
+            updatedAt = datetime('now')
+        "#,
+    )
+    .bind(format!("cnt_{}_{}", year, Uuid::new_v4().simple()))
+    .bind(year)
+    .bind(final_seq)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "letter": {
+            "id": letter_id,
+            "sequenceNumber": final_seq,
+            "fullNumber": full_number,
+            "sender": sender,
+            "letterDate": parsed_date.format("%Y-%m-%d").to_string(),
+            "receivedDate": received_date_str,
+            "subject": subject,
+            "unitName": unit.name,
+            "categoryName": category.name,
+            "letterType": "INCOMING"
+        }
+    })))
+}
+
 async fn generate_letter(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(input): Json<GenerateLetterInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    let is_admin = user.as_ref().map(|u| u.role == "admin").unwrap_or(false);
+
+    if input.is_manual && !is_admin {
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "error": "Akses ditolak: Mode penomoran manual hanya dapat digunakan oleh Staf Sekretariat (sekretariat@tass.telkomuniversity.ac.id)."
+        })));
+    }
+
     if input.unit_id.trim().is_empty()
         || input.category_id.trim().is_empty()
         || input.subject.trim().is_empty()
@@ -1154,9 +1719,15 @@ async fn generate_letter(
 
 async fn update_letter(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(input): Json<UpdateLetterInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Akses ditolak: Perubahan data agenda surat hanya dapat dilakukan oleh Staf Sekretariat.".to_string()));
+    }
+
     sqlx::query(
         r#"
         UPDATE "LetterRequest" SET
@@ -1166,6 +1737,8 @@ async fn update_letter(
             applicantContact = COALESCE(?, applicantContact),
             status = COALESCE(?, status),
             notes = COALESCE(?, notes),
+            sender = COALESCE(?, sender),
+            receivedDate = COALESCE(?, receivedDate),
             updatedAt = datetime('now')
         WHERE id = ?
         "#,
@@ -1176,6 +1749,8 @@ async fn update_letter(
     .bind(input.applicant_contact.as_deref().map(|s| s.trim()))
     .bind(input.status.as_deref().map(|s| s.trim()))
     .bind(input.notes.as_deref().map(|s| s.trim()))
+    .bind(input.sender.as_deref().map(|s| s.trim()))
+    .bind(input.received_date.as_deref().map(|s| s.trim()))
     .bind(&id)
     .execute(&state.dev_pool)
     .await
@@ -1189,8 +1764,14 @@ async fn update_letter(
 
 async fn delete_letter(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Akses ditolak: Penghapusan surat hanya dapat dilakukan oleh Staf Sekretariat.".to_string()));
+    }
+
     sqlx::query(r#"DELETE FROM "LetterRequest" WHERE id = ?"#)
         .bind(&id)
         .execute(&state.dev_pool)
@@ -1205,8 +1786,14 @@ async fn delete_letter(
 
 async fn bulk_delete_letters(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(input): Json<BulkDeleteInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Akses ditolak: Bulk delete hanya dapat dilakukan oleh Staf Sekretariat.".to_string()));
+    }
+
     if input.ids.is_empty() {
         return Ok(Json(serde_json::json!({
             "success": false,
@@ -1257,14 +1844,8 @@ async fn get_room_bookings(
     let limit = filters.limit.unwrap_or(100);
     let offset = filters.offset.unwrap_or(0);
 
-    let is_admin = headers
-        .get("x-admin-pin")
-        .and_then(|v| v.to_str().ok())
-        .map(|p| {
-            let p = p.trim();
-            p == "admin2026" || p == "fit2026" || p == "vokasibangunnegeri"
-        })
-        .unwrap_or(false);
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    let is_admin = user.as_ref().map(|u| u.role == "admin").unwrap_or(false);
 
     let mut sql = String::from(
         r#"
@@ -1278,6 +1859,15 @@ async fn get_room_bookings(
         WHERE 1=1
         "#,
     );
+
+    if filters.my_only == Some(true) {
+        if let Some(ref u) = user {
+            let email_clean = u.email.trim().to_lowercase();
+            sql.push_str(&format!(" AND lower(b.applicantEmail) = '{email_clean}'"));
+        } else {
+            return Ok(Json(vec![]));
+        }
+    }
 
     if let Some(ref d) = filters.date_str
         && !d.trim().is_empty() {
@@ -1331,18 +1921,26 @@ async fn get_room_bookings(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     };
 
-    let sanitized_bookings = if is_admin {
+    let user_email = user.as_ref().map(|u| u.email.trim().to_lowercase());
+    let sanitized_bookings = if is_admin || filters.my_only == Some(true) {
         bookings
     } else {
         bookings
             .into_iter()
             .map(|mut b| {
-                b.purpose = "[Agenda Terjadwal]".to_string();
-                b.applicant_name = "[Disamarkan]".to_string();
-                b.applicant_phone = "-".to_string();
-                b.unit_name = "[Unit Kampus]".to_string();
-                b.facility_notes = None;
-                b.notes = None;
+                let is_owner = match (&user_email, &b.applicant_email) {
+                    (Some(ue), Some(be)) => ue == &be.trim().to_lowercase(),
+                    _ => false,
+                };
+                if !is_owner {
+                    b.purpose = "[Agenda Terjadwal]".to_string();
+                    b.applicant_name = "[Disamarkan]".to_string();
+                    b.applicant_phone = "-".to_string();
+                    b.applicant_email = None;
+                    b.unit_name = "[Unit Kampus]".to_string();
+                    b.facility_notes = None;
+                    b.notes = None;
+                }
                 b
             })
             .collect()
@@ -1574,9 +2172,15 @@ async fn create_room_booking(
 
 async fn update_booking_status(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(input): Json<UpdateBookingStatusInput>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if !user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Err((StatusCode::FORBIDDEN, "Akses ditolak: Persetujuan peminjaman ruangan khusus Staf Sekretariat (sekretariat@tass.telkomuniversity.ac.id).".to_string()));
+    }
+
     let new_status = input.status.trim().to_uppercase();
 
     // Ambil data booking lengkap untuk pengiriman notifikasi keputusan ke pemohon
@@ -1646,12 +2250,25 @@ struct VerifyPasswordInput {
 }
 
 async fn verify_agenda_password(
+    State(state): State<AppState>,
+    headers: HeaderMap,
     Json(input): Json<VerifyPasswordInput>,
 ) -> impl IntoResponse {
-    if input.password.trim() == "vokasibangunnegeri" {
-        Json(serde_json::json!({ "success": true, "message": "Akses diberikan" }))
+    let user = get_current_user(&headers, &state.dev_pool).await;
+    if user.as_ref().map(|u| u.role == "admin").unwrap_or(false) {
+        return Json(serde_json::json!({ "success": true, "message": "Akses diberikan" }));
+    }
+    let pwd = input.password.trim();
+    if pwd == "vokasibangunnegeri" || pwd == "admin2026" || pwd == "fit2026" {
+        Json(serde_json::json!({
+            "success": true,
+            "message": "Akses diberikan (Disarankan login menggunakan akun Google sekretariat@tass.telkomuniversity.ac.id)"
+        }))
     } else {
-        Json(serde_json::json!({ "success": false, "error": "Password salah. Akses ditolak." }))
+        Json(serde_json::json!({
+            "success": false,
+            "error": "Password salah. Silakan login menggunakan akun Google sekretariat@tass.telkomuniversity.ac.id."
+        }))
     }
 }
 
