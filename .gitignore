@@ -20,3 +20,6 @@ frontend/.env
 !.env.example
 !*.env.example
 !**/.env.example
+
+# CSV & Data files
+*.csv
