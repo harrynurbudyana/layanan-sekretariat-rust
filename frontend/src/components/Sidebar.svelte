@@ -20,7 +20,7 @@
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Buat Nomor Surat', href: '/generator', icon: FilePlus2 },
     { name: 'Buku Agenda Surat', href: '/agenda', icon: BookOpenCheck },
-    { name: 'Peminjaman Ruangan', href: '/ruangan', icon: CalendarDays },
+    { name: 'Peminjaman Ruangan', href: '/ruangan', icon: CalendarDays, badge: 'Coming Soon' },
     { name: 'Histori Saya', href: '/histori', icon: History },
     { name: 'Panduan Format', href: '/panduan', icon: HelpCircle },
     { name: 'Master Data', href: '/master', icon: Database },
@@ -94,13 +94,20 @@
             : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white"
         )}
       >
-        <Icon
-          class={cn(
-            "h-4.5 w-4.5 shrink-0 transition-colors",
-            isActive ? "text-red-600 dark:text-red-400" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"
-          )}
-        />
-        <span class="truncate whitespace-nowrap">{item.name}</span>
+        <div class="flex items-center gap-3 min-w-0">
+          <Icon
+            class={cn(
+              "h-4.5 w-4.5 shrink-0 transition-colors",
+              isActive ? "text-red-600 dark:text-red-400" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"
+            )}
+          />
+          <span class="truncate whitespace-nowrap">{item.name}</span>
+        </div>
+        {#if (item as any).badge}
+          <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 shrink-0 ml-auto">
+            {(item as any).badge}
+          </span>
+        {/if}
       </button>
     {/each}
   </div>

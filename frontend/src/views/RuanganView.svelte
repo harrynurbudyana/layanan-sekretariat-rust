@@ -301,6 +301,43 @@
   let selectedFormRoom = $derived(rooms.find(r => r.id === formRoomId));
 </script>
 
+{#if !admin.isAdmin}
+  <!-- ACCESS GATE SCREEN (Coming Soon - Khusus Staf Sekretariat) -->
+  <div class="max-w-md mx-auto py-12 px-4 animate-in fade-in zoom-in-95 duration-200">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl text-center space-y-5">
+      <div class="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center shadow-lg shadow-amber-600/10 ring-1 ring-amber-500/20">
+        <Lock class="w-8 h-8" />
+      </div>
+
+      <div>
+        <span class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80">
+          Coming Soon &bull; Khusus Staf Sekretariat
+        </span>
+        <h2 class="text-xl font-black text-slate-900 dark:text-white mt-3">
+          Peminjaman Ruangan FIT
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+          Fitur peminjaman ruangan mandiri saat ini masih dalam tahap penyiapan dan uji coba internal. Untuk sementara waktu, modul ini hanya dapat diakses oleh staf sekretariat fakultas.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onclick={() => auth.openLoginModal()}
+        class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-700 hover:to-amber-700 text-white font-bold text-xs shadow-md shadow-red-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+      >
+        <ShieldCheck class="w-4 h-4" />
+        <span>Masuk sebagai Staf Sekretariat</span>
+      </button>
+
+      {#if auth.isLoggedIn && !admin.isAdmin}
+        <div class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-left text-xs text-amber-800 dark:text-amber-300">
+          Anda sedang login sebagai <strong>{auth.user?.email}</strong>. Akun ini tidak memiliki hak akses staf sekretariat. Fitur ini akan segera dibuka untuk umum setelah tahap integrasi selesai.
+        </div>
+      {/if}
+    </div>
+  </div>
+{:else}
 <div class="space-y-6">
   <!-- Title Bar -->
   <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -910,3 +947,4 @@
     </div>
   {/if}
 </div>
+{/if}

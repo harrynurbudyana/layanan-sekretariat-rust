@@ -11,8 +11,11 @@
     Clock, 
     DoorOpen, 
     CheckCircle2, 
-    ArrowRight 
+    ArrowRight,
+    HelpCircle,
+    History
   } from 'lucide-svelte';
+  import { admin } from '../lib/admin.svelte';
   import { router } from '../lib/router.svelte';
   import { formatDateIndo, getCategoryBadgeClass } from '../lib/utils';
 
@@ -80,6 +83,7 @@
       >
         <CalendarDays size={16} class="w-4 h-4 shrink-0" />
         <span>Pinjam Ruangan</span>
+        <span class="text-[10px] bg-amber-600/70 text-amber-100 px-1.5 py-0.5 rounded font-semibold border border-amber-300/30 ml-0.5">Coming Soon</span>
       </button>
     </div>
   </div>
@@ -185,55 +189,161 @@
 
   <!-- Recent Letters & Breakdowns (Stable Height Containers) -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-    <!-- Recent Letters List (2 cols) -->
+    <!-- Recent Letters List (Khusus Staf Sekretariat) OR Layanan & Kategori Publik (Umum) -->
     <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 min-h-[460px]">
-      <div class="flex items-center justify-between mb-5">
-        <div>
-          <h2 class="text-base font-bold text-slate-900 dark:text-white">Surat Baru Terbit</h2>
-          <p class="text-xs text-slate-500">5 nomor surat terbaru yang diterbitkan</p>
-        </div>
-        <button
-          type="button"
-          onclick={() => router.navigate('/agenda')}
-          class="text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 flex items-center gap-1 cursor-pointer"
-        >
-          <span>Lihat Semua</span>
-          <ArrowRight size={14} class="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {#if loading && !stats}
-        <!-- Skeleton loading placeholder to reserve height and prevent CLS -->
-        <div class="space-y-3">
-          {#each [1, 2, 3, 4, 5] as _}
-            <div class="p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 animate-pulse h-[68px]">
-              <div class="h-3.5 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-2"></div>
-              <div class="h-3 bg-slate-100 dark:bg-slate-800 rounded w-2/3"></div>
+      {#if admin.isAdmin}
+        <!-- TAMPILAN KHUSUS STAF SEKRETARIAT (ADMIN) -->
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-base font-bold text-slate-900 dark:text-white">Surat Baru Terbit</h2>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                Staf Sekretariat
+              </span>
             </div>
-          {/each}
+            <p class="text-xs text-slate-500">5 nomor surat terbaru yang diterbitkan</p>
+          </div>
+          <button
+            type="button"
+            onclick={() => router.navigate('/agenda')}
+            class="text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 flex items-center gap-1 cursor-pointer"
+          >
+            <span>Buka Buku Agenda</span>
+            <ArrowRight size={14} class="w-3.5 h-3.5" />
+          </button>
         </div>
-      {:else if stats?.recent_letters && stats.recent_letters.length > 0}
-        <div class="space-y-3">
-          {#each stats.recent_letters as letter}
-            <div class="p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div class="flex items-center gap-2 mb-1">
-                  <span class="font-mono text-xs font-bold text-red-600 dark:text-red-400">{letter.full_number}</span>
-                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {getCategoryBadgeClass(letter.classification_code)}">
-                    {letter.category_name || 'Umum'}
+
+        {#if loading && !stats}
+          <!-- Skeleton loading placeholder -->
+          <div class="space-y-3">
+            {#each [1, 2, 3, 4, 5] as _}
+              <div class="p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 animate-pulse h-[68px]">
+                <div class="h-3.5 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-2"></div>
+                <div class="h-3 bg-slate-100 dark:bg-slate-800 rounded w-2/3"></div>
+              </div>
+            {/each}
+          </div>
+        {:else if stats?.recent_letters && stats.recent_letters.length > 0}
+          <div class="space-y-3">
+            {#each stats.recent_letters as letter}
+              <div class="p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-mono text-xs font-bold text-red-600 dark:text-red-400">{letter.full_number}</span>
+                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {getCategoryBadgeClass(letter.classification_code)}">
+                      {letter.category_name || 'Umum'}
+                    </span>
+                  </div>
+                  <h3 class="text-xs font-medium text-slate-800 dark:text-slate-200 line-clamp-1">{letter.subject}</h3>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Pemohon: {letter.applicant_name} ({letter.unit_name || '-'})</p>
+                </div>
+                <div class="text-[11px] text-slate-400 shrink-0 sm:text-right">
+                  {formatDateIndo(letter.letter_date)}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="text-center py-16 text-slate-400 text-xs">Belum ada surat yang diterbitkan.</div>
+        {/if}
+      {:else}
+        <!-- TAMPILAN DASHBOARD UMUM (PUBLIK) -->
+        <div class="mb-5">
+          <h2 class="text-base font-bold text-slate-900 dark:text-white">Layanan Mandiri &amp; Akses Cepat</h2>
+          <p class="text-xs text-slate-500">Akses cepat pembuatan surat resmi, panduan format nomor, dan riwayat pemohon</p>
+        </div>
+
+        <!-- Quick Shortcut Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <button
+            type="button"
+            onclick={() => router.navigate('/generator')}
+            class="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-red-300 dark:hover:border-red-900/60 bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-900/50 hover:shadow-md transition-all text-left group cursor-pointer"
+          >
+            <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform shadow-2xs">
+              <FilePlus2 class="w-5 h-5" />
+            </div>
+            <h3 class="text-xs font-bold text-slate-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
+              Buat Nomor Surat
+            </h3>
+            <p class="text-[11px] text-slate-500 mt-1 leading-normal">
+              Penomoran surat dinas, tugas, &amp; keterangan instan otomatis.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onclick={() => router.navigate('/panduan')}
+            class="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-900/60 bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-900/50 hover:shadow-md transition-all text-left group cursor-pointer"
+          >
+            <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform shadow-2xs">
+              <HelpCircle class="w-5 h-5" />
+            </div>
+            <h3 class="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              Panduan Format
+            </h3>
+            <p class="text-[11px] text-slate-500 mt-1 leading-normal">
+              Daftar kode klasifikasi perihal &amp; penandatangan resmi Tel-U.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onclick={() => router.navigate('/histori')}
+            class="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-900/60 bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-900/50 hover:shadow-md transition-all text-left group cursor-pointer"
+          >
+            <div class="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform shadow-2xs">
+              <History class="w-5 h-5" />
+            </div>
+            <h3 class="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+              Histori Surat Saya
+            </h3>
+            <p class="text-[11px] text-slate-500 mt-1 leading-normal">
+              Pantau riwayat pengajuan nomor surat milik Anda.
+            </p>
+          </button>
+        </div>
+
+        <!-- Statistik Kategori Surat Terbanyak (Aman untuk Publik) -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Layers class="w-3.5 h-3.5 text-red-600" />
+              <span>Klasifikasi Surat Terbanyak Tahun Ini</span>
+            </h3>
+            <span class="text-[11px] text-slate-400 font-medium">Agregat Resmi</span>
+          </div>
+
+          {#if loading && !stats}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {#each [1, 2, 3, 4] as _}
+                <div class="h-14 rounded-xl bg-slate-100 dark:bg-slate-800/60 animate-pulse"></div>
+              {/each}
+            </div>
+          {:else if stats?.category_stats && stats.category_stats.length > 0}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {#each stats.category_stats as cat}
+                <div class="p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-800/30 flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 mb-0.5">
+                      <span class="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {cat.categoryCode}
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate font-medium">
+                      {cat.categoryName}
+                    </p>
+                  </div>
+                  <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-2xs shrink-0 border border-slate-200/60 dark:border-slate-700">
+                    {cat.count} surat
                   </span>
                 </div>
-                <h3 class="text-xs font-medium text-slate-800 dark:text-slate-200 line-clamp-1">{letter.subject}</h3>
-                <p class="text-[11px] text-slate-400 mt-0.5">Pemohon: {letter.applicant_name} ({letter.unit_name || '-'})</p>
-              </div>
-              <div class="text-[11px] text-slate-400 shrink-0 sm:text-right">
-                {formatDateIndo(letter.letter_date)}
-              </div>
+              {/each}
             </div>
-          {/each}
+          {:else}
+            <p class="text-xs text-slate-400 py-4 text-center">Belum ada statistik kategori.</p>
+          {/if}
         </div>
-      {:else}
-        <div class="text-center py-16 text-slate-400 text-xs">Belum ada surat yang diterbitkan.</div>
       {/if}
     </div>
 
