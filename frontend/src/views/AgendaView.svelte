@@ -14,6 +14,7 @@
     ChevronRight,
     ChevronFirst,
     ChevronLast,
+    ChevronDown,
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
@@ -30,7 +31,11 @@
     ArrowDownLeft,
     ArrowUpRight,
     Building2,
-    Calendar
+    Calendar,
+    Hash,
+    Clock,
+    FileText,
+    User
   } from 'lucide-svelte';
   import { admin } from '../lib/admin.svelte';
   import { auth } from '../lib/auth.svelte';
@@ -55,9 +60,31 @@
   let selectedLetterType = $state<'ALL' | 'OUTGOING' | 'INCOMING'>('ALL');
   let sortBy = $state<'sequence_number' | 'letter_date' | 'received_date' | 'full_number' | 'subject' | 'applicant_name' | 'unit'>('sequence_number');
   let sortOrder = $state<'DESC' | 'ASC'>('DESC');
+  let sortDropdownOpen = $state(false);
   let page = $state(1);
   let pageSize = $state(25);
   let jumpPage = $state(1);
+
+  const sortOptions = [
+    { value: 'sequence_number', label: 'No. Urut / Agenda', icon: Hash },
+    { value: 'letter_date', label: 'Tanggal Surat', icon: Calendar },
+    { value: 'received_date', label: 'Tanggal Diterima', icon: Clock },
+    { value: 'full_number', label: 'Nomor Surat', icon: FileText },
+    { value: 'subject', label: 'Perihal Surat', icon: FileText },
+    { value: 'applicant_name', label: 'Pemohon / Pengirim', icon: User },
+    { value: 'unit', label: 'Unit / Prodi', icon: Building2 },
+  ] as const;
+
+  function getSortLabel(val: string) {
+    return sortOptions.find(o => o.value === val)?.label || 'No. Urut / Agenda';
+  }
+
+  function selectSort(val: any) {
+    sortBy = val;
+    sortDropdownOpen = false;
+    page = 1;
+    fetchLetters();
+  }
 
   const monthsIndo = [
     { value: 1, label: 'Januari' },
@@ -594,38 +621,129 @@
 
         <!-- Right Side: Menu Sort & Reset Filter -->
         <div class="flex items-center gap-2 flex-wrap">
-          <!-- Sort Dropdown & Direction Toggle -->
-          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
-            <SlidersHorizontal class="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <span class="text-xs font-semibold text-slate-500 hidden sm:inline">Urutkan:</span>
-            <select
-              bind:value={sortBy}
-              onchange={() => { page = 1; fetchLetters(); }}
-              class="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden cursor-pointer"
-            >
-              <option value="sequence_number">No. Urut / Agenda</option>
-              <option value="letter_date">Tanggal Surat</option>
-              <option value="received_date">Tanggal Diterima</option>
-              <option value="full_number">Nomor Surat</option>
-              <option value="subject">Perihal Surat</option>
-              <option value="applicant_name">Pemohon / Pengirim</option>
-              <option value="unit">Unit / Prodi</option>
-            </select>
+          <!-- Modern Custom Sort Dropdown -->
+          <div class="relative">
+            <div class="flex items-center rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-2xs p-1 gap-1">
+              <button
+                type="button"
+                onclick={() => sortDropdownOpen = !sortDropdownOpen}
+                class={cn(
+                  "flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                  sortDropdownOpen 
+                    ? "bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs ring-1 ring-red-500/30" 
+                    : "text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                <SlidersHorizontal class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span class="text-slate-400 font-medium hidden sm:inline">Urutan:</span>
+                <span class="font-bold text-slate-900 dark:text-white">{getSortLabel(sortBy)}</span>
+                <ChevronDown class={cn("w-3.5 h-3.5 text-slate-400 transition-transform duration-200", sortDropdownOpen && "rotate-180")} />
+              </button>
 
-            <button
-              type="button"
-              onclick={() => { sortOrder = sortOrder === 'DESC' ? 'ASC' : 'DESC'; page = 1; fetchLetters(); }}
-              title={sortOrder === 'DESC' ? 'Urutan: Menurun / Terbaru (Klik untuk Menaik / Terlama)' : 'Urutan: Menaik / Terlama (Klik untuk Menurun / Terbaru)'}
-              class="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer flex items-center gap-1"
-            >
-              {#if sortOrder === 'DESC'}
-                <ArrowDown class="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                <span class="text-[10px] font-bold text-red-600 dark:text-red-400 hidden md:inline">DESC</span>
-              {:else}
-                <ArrowUp class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 hidden md:inline">ASC</span>
-              {/if}
-            </button>
+              <div class="h-4 w-px bg-slate-200 dark:border-slate-700 dark:bg-slate-700"></div>
+
+              <!-- Quick DESC/ASC Toggle Button -->
+              <button
+                type="button"
+                onclick={() => { sortOrder = sortOrder === 'DESC' ? 'ASC' : 'DESC'; page = 1; fetchLetters(); }}
+                title={sortOrder === 'DESC' ? 'Urutan Menurun (Terbaru) - Klik untuk Mengubah ke Menaik' : 'Urutan Menaik (Terlama) - Klik untuk Mengubah ke Menurun'}
+                class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors hover:bg-slate-200/70 dark:hover:bg-slate-700/80 cursor-pointer"
+              >
+                {#if sortOrder === 'DESC'}
+                  <ArrowDown class="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                  <span class="text-[10px] font-bold text-red-600 dark:text-red-400">DESC</span>
+                {:else}
+                  <ArrowUp class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400">ASC</span>
+                {/if}
+              </button>
+            </div>
+
+            {#if sortDropdownOpen}
+              <!-- Backdrop for click outside -->
+              <button 
+                type="button"
+                tabindex="-1"
+                aria-label="Tutup menu"
+                class="fixed inset-0 z-40 bg-transparent cursor-default border-none" 
+                onclick={() => sortDropdownOpen = false}
+              ></button>
+
+              <!-- Floating Dropdown Menu Popover -->
+              <div 
+                class="absolute right-0 sm:right-auto sm:left-0 top-full mt-2 w-64 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md ring-1 ring-slate-900/5 dark:ring-white/10"
+              >
+                <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800/80 mb-1 flex items-center justify-between">
+                  <span>Pilih Kolom Urutan</span>
+                  <span class="text-[10px] font-mono font-bold text-red-600 dark:text-red-400">{sortOrder}</span>
+                </div>
+
+                {#each sortOptions as opt}
+                  {@const IconComponent = opt.icon}
+                  {@const isSelected = sortBy === opt.value}
+                  <button
+                    type="button"
+                    onclick={() => selectSort(opt.value)}
+                    class={cn(
+                      "w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer text-left",
+                      isSelected
+                        ? "bg-red-50 dark:bg-red-600/15 text-red-600 dark:text-red-400 font-bold"
+                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white"
+                    )}
+                  >
+                    <div class="flex items-center gap-2.5">
+                      <div class={cn(
+                        "w-6 h-6 rounded-lg flex items-center justify-center transition-colors",
+                        isSelected 
+                          ? "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400" 
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-400"
+                      )}>
+                        <IconComponent class="w-3.5 h-3.5" />
+                      </div>
+                      <span>{opt.label}</span>
+                    </div>
+                    {#if isSelected}
+                      <Check class="w-4 h-4 text-red-600 dark:text-red-400" />
+                    {/if}
+                  </button>
+                {/each}
+
+                <!-- Arah Urutan Controls inside Dropdown -->
+                <div class="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800/80">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-2.5 mb-1.5">
+                    Arah Urutan
+                  </div>
+                  <div class="grid grid-cols-2 gap-1 p-1 bg-slate-100 dark:bg-slate-800/70 rounded-xl">
+                    <button
+                      type="button"
+                      onclick={() => { sortOrder = 'DESC'; page = 1; fetchLetters(); sortDropdownOpen = false; }}
+                      class={cn(
+                        "py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                        sortOrder === 'DESC'
+                          ? "bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                      )}
+                    >
+                      <ArrowDown class="w-3.5 h-3.5" />
+                      <span>Menurun (DESC)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onclick={() => { sortOrder = 'ASC'; page = 1; fetchLetters(); sortDropdownOpen = false; }}
+                      class={cn(
+                        "py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                        sortOrder === 'ASC'
+                          ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                      )}
+                    >
+                      <ArrowUp class="w-3.5 h-3.5" />
+                      <span>Menaik (ASC)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {/if}
           </div>
 
           <!-- Reset Filter Button -->

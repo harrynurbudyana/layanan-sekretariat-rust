@@ -14,3 +14,27 @@ html, body {
   transition-property: color, background-color, border-color;
   transition-duration: 150ms;
 }
+
+/* Color scheme and native form controls theming */
+html.dark {
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+select {
+  color-scheme: inherit;
+}
+
+.dark select option {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
