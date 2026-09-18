@@ -261,6 +261,8 @@ struct LetterFilters {
     status: Option<String>,
     my_only: Option<bool>,
     letter_type: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1217,9 +1219,18 @@ async fn get_letters(
 
     if let Some(ref st) = filters.status
         && !st.trim().is_empty() && st != "ALL" {
-            let part = format!(" AND l.status = {st}");
-            sql.push_str(&part);
-            count_sql.push_str(&part);
+            let clean_st = match st.to_uppercase().as_str() {
+                "ISSUED" => "ISSUED",
+                "DRAFT" => "DRAFT",
+                "ARCHIVED" => "ARCHIVED",
+                "CANCELLED" => "CANCELLED",
+                _ => "",
+            };
+            if !clean_st.is_empty() {
+                let part = format!(" AND l.status = '{clean_st}'");
+                sql.push_str(&part);
+                count_sql.push_str(&part);
+            }
         }
 
     if let Some(ref cid) = filters.category_id
@@ -1229,7 +1240,76 @@ async fn get_letters(
             count_sql.push_str(&part);
         }
 
-    sql.push_str(" ORDER BY l.year DESC, l.sequenceNumber DESC LIMIT ? OFFSET ?");
+    let is_asc = filters.sort_order.as_deref().map(|s| s.eq_ignore_ascii_case("ASC")).unwrap_or(false);
+
+    let order_clause = match filters.sort_by.as_deref() {
+        Some("sequence_number") | Some("sequenceNumber") => {
+            if is_asc {
+                " ORDER BY l.year ASC, l.sequenceNumber ASC"
+            } else {
+                " ORDER BY l.year DESC, l.sequenceNumber DESC"
+            }
+        }
+        Some("letter_date") | Some("letterDate") => {
+            if is_asc {
+                " ORDER BY l.letterDate ASC, l.sequenceNumber ASC"
+            } else {
+                " ORDER BY l.letterDate DESC, l.sequenceNumber DESC"
+            }
+        }
+        Some("received_date") | Some("receivedDate") => {
+            if is_asc {
+                " ORDER BY l.receivedDate ASC, l.sequenceNumber ASC"
+            } else {
+                " ORDER BY l.receivedDate DESC, l.sequenceNumber DESC"
+            }
+        }
+        Some("full_number") | Some("fullNumber") => {
+            if is_asc {
+                " ORDER BY l.fullNumber ASC"
+            } else {
+                " ORDER BY l.fullNumber DESC"
+            }
+        }
+        Some("subject") => {
+            if is_asc {
+                " ORDER BY l.subject ASC"
+            } else {
+                " ORDER BY l.subject DESC"
+            }
+        }
+        Some("applicant_name") | Some("applicantName") => {
+            if is_asc {
+                " ORDER BY l.applicantName ASC"
+            } else {
+                " ORDER BY l.applicantName DESC"
+            }
+        }
+        Some("recipient") => {
+            if is_asc {
+                " ORDER BY l.recipient ASC"
+            } else {
+                " ORDER BY l.recipient DESC"
+            }
+        }
+        Some("unit") | Some("unitName") => {
+            if is_asc {
+                " ORDER BY u.name ASC, l.sequenceNumber ASC"
+            } else {
+                " ORDER BY u.name DESC, l.sequenceNumber DESC"
+            }
+        }
+        _ => {
+            if is_asc {
+                " ORDER BY l.year ASC, l.sequenceNumber ASC"
+            } else {
+                " ORDER BY l.year DESC, l.sequenceNumber DESC"
+            }
+        }
+    };
+
+    sql.push_str(order_clause);
+    sql.push_str(" LIMIT ? OFFSET ?");
 
     // Execute count
     let total: (i64,) = if let Some(ref s) = filters.search {

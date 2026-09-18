@@ -12,6 +12,13 @@
     AlertCircle, 
     ChevronLeft, 
     ChevronRight,
+    ChevronFirst,
+    ChevronLast,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    SlidersHorizontal,
+    RotateCcw,
     X,
     FileSpreadsheet,
     Lock,
@@ -38,15 +45,34 @@
   let categories = $state<any[]>([]);
   let loading = $state(false);
 
-  // Filters
+  // Filters & Sorting
   let search = $state('');
   let selectedYear = $state<number | null>(new Date().getFullYear());
   let selectedMonth = $state<number | null>(null);
   let selectedUnit = $state('ALL');
   let selectedCategory = $state('ALL');
+  let selectedStatus = $state('ALL');
   let selectedLetterType = $state<'ALL' | 'OUTGOING' | 'INCOMING'>('ALL');
+  let sortBy = $state<'sequence_number' | 'letter_date' | 'received_date' | 'full_number' | 'subject' | 'applicant_name' | 'unit'>('sequence_number');
+  let sortOrder = $state<'DESC' | 'ASC'>('DESC');
   let page = $state(1);
-  const pageSize = 25;
+  let pageSize = $state(25);
+  let jumpPage = $state(1);
+
+  const monthsIndo = [
+    { value: 1, label: 'Januari' },
+    { value: 2, label: 'Februari' },
+    { value: 3, label: 'Maret' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'Mei' },
+    { value: 6, label: 'Juni' },
+    { value: 7, label: 'Juli' },
+    { value: 8, label: 'Agustus' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'Oktober' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'Desember' }
+  ];
 
   // Selected for bulk
   let selectedIds = $state<string[]>([]);
@@ -192,6 +218,49 @@
     }
   }
 
+  let activeFilterCount = $derived(
+    (search.trim() ? 1 : 0) +
+    (selectedYear !== null ? 1 : 0) +
+    (selectedMonth !== null ? 1 : 0) +
+    (selectedUnit !== 'ALL' ? 1 : 0) +
+    (selectedCategory !== 'ALL' ? 1 : 0) +
+    (selectedStatus !== 'ALL' ? 1 : 0) +
+    (selectedLetterType !== 'ALL' ? 1 : 0)
+  );
+
+  function resetAllFilters() {
+    search = '';
+    selectedYear = new Date().getFullYear();
+    selectedMonth = null;
+    selectedUnit = 'ALL';
+    selectedCategory = 'ALL';
+    selectedStatus = 'ALL';
+    selectedLetterType = 'ALL';
+    sortBy = 'sequence_number';
+    sortOrder = 'DESC';
+    page = 1;
+    fetchLetters();
+  }
+
+  function toggleSort(col: 'sequence_number' | 'letter_date' | 'received_date' | 'full_number' | 'subject' | 'applicant_name' | 'unit') {
+    if (sortBy === col) {
+      sortOrder = sortOrder === 'DESC' ? 'ASC' : 'DESC';
+    } else {
+      sortBy = col;
+      sortOrder = (col === 'sequence_number' || col === 'letter_date' || col === 'received_date') ? 'DESC' : 'ASC';
+    }
+    page = 1;
+    fetchLetters();
+  }
+
+  function handleJumpPage(targetPage: number) {
+    const valid = Math.max(1, Math.min(targetPage, totalPages));
+    if (valid !== page) {
+      page = valid;
+      fetchLetters();
+    }
+  }
+
   async function fetchLetters() {
     loading = true;
     try {
@@ -203,7 +272,10 @@
       if (selectedMonth) params.append('month', selectedMonth.toString());
       if (selectedUnit !== 'ALL') params.append('unit_id', selectedUnit);
       if (selectedCategory !== 'ALL') params.append('category_id', selectedCategory);
+      if (selectedStatus !== 'ALL') params.append('status', selectedStatus);
       if (selectedLetterType !== 'ALL') params.append('letter_type', selectedLetterType);
+      params.append('sort_by', sortBy);
+      params.append('sort_order', sortOrder);
 
       const res = await fetch(`/api/letters?${params.toString()}`, {
         headers: auth.getAuthHeaders()
@@ -211,6 +283,7 @@
       const data = await res.json();
       letters = data.letters || [];
       total = data.total || 0;
+      jumpPage = page;
     } catch (e) {
       console.error(e);
     } finally {
@@ -473,51 +546,108 @@
       </div>
     </div>
 
-    <!-- Filter Toolbar -->
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-      <!-- Tab Filter: Semua Surat | Surat Keluar | Surat Masuk -->
-      <div class="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl w-fit">
-        <button
-          type="button"
-          onclick={() => { selectedLetterType = 'ALL'; handleFilterChange(); }}
-          class={cn(
-            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-            selectedLetterType === 'ALL'
-              ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
-              : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-          )}
-        >
-          <span>Semua Surat</span>
-        </button>
-        <button
-          type="button"
-          onclick={() => { selectedLetterType = 'OUTGOING'; handleFilterChange(); }}
-          class={cn(
-            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-            selectedLetterType === 'OUTGOING'
-              ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs"
-              : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-          )}
-        >
-          <Send class="w-3.5 h-3.5" />
-          <span>Surat Keluar</span>
-        </button>
-        <button
-          type="button"
-          onclick={() => { selectedLetterType = 'INCOMING'; handleFilterChange(); }}
-          class={cn(
-            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-            selectedLetterType === 'INCOMING'
-              ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs"
-              : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-          )}
-        >
-          <Inbox class="w-3.5 h-3.5" />
-          <span>Surat Masuk</span>
-        </button>
+    <!-- Filter & Sort Toolbar -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+      <!-- Top Row: Tab Jenis Surat + Menu Sort + Reset Filter -->
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <!-- Tab Filter: Semua Surat | Surat Keluar | Surat Masuk -->
+        <div class="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl w-fit">
+          <button
+            type="button"
+            onclick={() => { selectedLetterType = 'ALL'; handleFilterChange(); }}
+            class={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+              selectedLetterType === 'ALL'
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            )}
+          >
+            <span>Semua Surat</span>
+          </button>
+          <button
+            type="button"
+            onclick={() => { selectedLetterType = 'OUTGOING'; handleFilterChange(); }}
+            class={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+              selectedLetterType === 'OUTGOING'
+                ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            )}
+          >
+            <Send class="w-3.5 h-3.5" />
+            <span>Surat Keluar</span>
+          </button>
+          <button
+            type="button"
+            onclick={() => { selectedLetterType = 'INCOMING'; handleFilterChange(); }}
+            class={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+              selectedLetterType === 'INCOMING'
+                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            )}
+          >
+            <Inbox class="w-3.5 h-3.5" />
+            <span>Surat Masuk</span>
+          </button>
+        </div>
+
+        <!-- Right Side: Menu Sort & Reset Filter -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Sort Dropdown & Direction Toggle -->
+          <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+            <SlidersHorizontal class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span class="text-xs font-semibold text-slate-500 hidden sm:inline">Urutkan:</span>
+            <select
+              bind:value={sortBy}
+              onchange={() => { page = 1; fetchLetters(); }}
+              class="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-hidden cursor-pointer"
+            >
+              <option value="sequence_number">No. Urut / Agenda</option>
+              <option value="letter_date">Tanggal Surat</option>
+              <option value="received_date">Tanggal Diterima</option>
+              <option value="full_number">Nomor Surat</option>
+              <option value="subject">Perihal Surat</option>
+              <option value="applicant_name">Pemohon / Pengirim</option>
+              <option value="unit">Unit / Prodi</option>
+            </select>
+
+            <button
+              type="button"
+              onclick={() => { sortOrder = sortOrder === 'DESC' ? 'ASC' : 'DESC'; page = 1; fetchLetters(); }}
+              title={sortOrder === 'DESC' ? 'Urutan: Menurun / Terbaru (Klik untuk Menaik / Terlama)' : 'Urutan: Menaik / Terlama (Klik untuk Menurun / Terbaru)'}
+              class="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer flex items-center gap-1"
+            >
+              {#if sortOrder === 'DESC'}
+                <ArrowDown class="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                <span class="text-[10px] font-bold text-red-600 dark:text-red-400 hidden md:inline">DESC</span>
+              {:else}
+                <ArrowUp class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span class="text-[10px] font-bold text-blue-600 dark:text-blue-400 hidden md:inline">ASC</span>
+              {/if}
+            </button>
+          </div>
+
+          <!-- Reset Filter Button -->
+          {#if activeFilterCount > 0}
+            <button
+              type="button"
+              onclick={resetAllFilters}
+              title="Reset seluruh filter pencarian"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/60 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            >
+              <RotateCcw class="w-3.5 h-3.5" />
+              <span>Reset Filter</span>
+              <span class="w-4 h-4 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center font-bold">
+                {activeFilterCount}
+              </span>
+            </button>
+          {/if}
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <!-- Bottom Row: Filter Inputs Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
         <!-- Search Input -->
         <div class="lg:col-span-2 relative">
           <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -525,9 +655,18 @@
             type="text"
             bind:value={search}
             oninput={handleFilterChange}
-            placeholder="Cari nomor surat, pengirim, perihal, pemohon..."
-            class="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500/30"
+            placeholder="Cari no. surat, perihal, pemohon, pengirim..."
+            class="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-red-500/30 font-medium"
           />
+          {#if search.trim()}
+            <button
+              type="button"
+              onclick={() => { search = ''; handleFilterChange(); }}
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white p-0.5 cursor-pointer"
+            >
+              <X class="w-3.5 h-3.5" />
+            </button>
+          {/if}
         </div>
 
         <!-- Year Filter -->
@@ -535,7 +674,7 @@
           <select
             bind:value={selectedYear}
             onchange={handleFilterChange}
-            class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
+            class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-red-500/30 font-medium cursor-pointer"
           >
             <option value={null}>Semua Tahun</option>
             <option value={2026}>Tahun 2026</option>
@@ -544,12 +683,26 @@
           </select>
         </div>
 
-        <!-- Unit Filter -->
+        <!-- Month Filter -->
+        <div>
+          <select
+            bind:value={selectedMonth}
+            onchange={handleFilterChange}
+            class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-red-500/30 font-medium cursor-pointer"
+          >
+            <option value={null}>Semua Bulan</option>
+            {#each monthsIndo as m}
+              <option value={m.value}>{m.label}</option>
+            {/each}
+          </select>
+        </div>
+
+        <!-- Unit / Prodi Filter -->
         <div>
           <select
             bind:value={selectedUnit}
             onchange={handleFilterChange}
-            class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
+            class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-red-500/30 font-medium cursor-pointer"
           >
             <option value="ALL">Semua Unit / Prodi</option>
             {#each units as u}
@@ -563,7 +716,7 @@
           <select
             bind:value={selectedCategory}
             onchange={handleFilterChange}
-            class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
+            class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-red-500/30 font-medium cursor-pointer"
           >
             <option value="ALL">Semua Kategori</option>
             {#each categories as c}
@@ -596,16 +749,101 @@
                       type="checkbox"
                       checked={selectedIds.length === letters.length && letters.length > 0}
                       onchange={handleSelectAll}
-                      class="rounded text-red-600 focus:ring-red-500"
+                      class="rounded text-red-600 focus:ring-red-500 cursor-pointer"
                     />
                   </th>
                 {/if}
-                <th class="p-3.5 w-16 text-center">No</th>
+                <th 
+                  class="p-3.5 w-16 text-center cursor-pointer select-none hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-100/70 dark:hover:bg-slate-800 transition-colors"
+                  onclick={() => toggleSort('sequence_number')}
+                  title="Klik untuk mengurutkan berdasarkan Nomor Urut"
+                >
+                  <div class="inline-flex items-center justify-center gap-1">
+                    <span>No</span>
+                    {#if sortBy === 'sequence_number'}
+                      {#if sortOrder === 'DESC'}
+                        <ArrowDown class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {:else}
+                        <ArrowUp class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {/if}
+                    {:else}
+                      <ArrowUpDown class="w-3 h-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-400" />
+                    {/if}
+                  </div>
+                </th>
                 <th class="p-3.5">Jenis</th>
-                <th class="p-3.5">Nomor Surat Lengkap</th>
-                <th class="p-3.5">Perihal Surat</th>
-                <th class="p-3.5">Asal / Pemohon & Unit</th>
-                <th class="p-3.5">Tanggal</th>
+                <th 
+                  class="p-3.5 cursor-pointer select-none hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-100/70 dark:hover:bg-slate-800 transition-colors"
+                  onclick={() => toggleSort('full_number')}
+                  title="Klik untuk mengurutkan berdasarkan Nomor Surat"
+                >
+                  <div class="inline-flex items-center gap-1">
+                    <span>Nomor Surat Lengkap</span>
+                    {#if sortBy === 'full_number'}
+                      {#if sortOrder === 'DESC'}
+                        <ArrowDown class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {:else}
+                        <ArrowUp class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {/if}
+                    {:else}
+                      <ArrowUpDown class="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                    {/if}
+                  </div>
+                </th>
+                <th 
+                  class="p-3.5 cursor-pointer select-none hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-100/70 dark:hover:bg-slate-800 transition-colors"
+                  onclick={() => toggleSort('subject')}
+                  title="Klik untuk mengurutkan berdasarkan Perihal"
+                >
+                  <div class="inline-flex items-center gap-1">
+                    <span>Perihal Surat</span>
+                    {#if sortBy === 'subject'}
+                      {#if sortOrder === 'DESC'}
+                        <ArrowDown class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {:else}
+                        <ArrowUp class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {/if}
+                    {:else}
+                      <ArrowUpDown class="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                    {/if}
+                  </div>
+                </th>
+                <th 
+                  class="p-3.5 cursor-pointer select-none hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-100/70 dark:hover:bg-slate-800 transition-colors"
+                  onclick={() => toggleSort('applicant_name')}
+                  title="Klik untuk mengurutkan berdasarkan Pemohon / Pengirim"
+                >
+                  <div class="inline-flex items-center gap-1">
+                    <span>Asal / Pemohon & Unit</span>
+                    {#if sortBy === 'applicant_name'}
+                      {#if sortOrder === 'DESC'}
+                        <ArrowDown class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {:else}
+                        <ArrowUp class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {/if}
+                    {:else}
+                      <ArrowUpDown class="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                    {/if}
+                  </div>
+                </th>
+                <th 
+                  class="p-3.5 cursor-pointer select-none hover:text-red-600 dark:hover:text-red-400 hover:bg-slate-100/70 dark:hover:bg-slate-800 transition-colors"
+                  onclick={() => toggleSort('letter_date')}
+                  title="Klik untuk mengurutkan berdasarkan Tanggal Surat"
+                >
+                  <div class="inline-flex items-center gap-1">
+                    <span>Tanggal</span>
+                    {#if sortBy === 'letter_date'}
+                      {#if sortOrder === 'DESC'}
+                        <ArrowDown class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {:else}
+                        <ArrowUp class="w-3 h-3 text-red-600 dark:text-red-400" />
+                      {/if}
+                    {:else}
+                      <ArrowUpDown class="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                    {/if}
+                  </div>
+                </th>
                 <th class="p-3.5 text-right">Aksi</th>
               </tr>
             </thead>
@@ -701,25 +939,93 @@
         </div>
 
         <!-- Pagination -->
-        <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-          <div>
-            Halaman <strong class="text-slate-800 dark:text-slate-200">{page}</strong> dari <strong class="text-slate-800 dark:text-slate-200">{totalPages}</strong> ({total} total)
+        <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div>
+              Menampilkan <strong class="text-slate-800 dark:text-slate-200">{letters.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, total)}</strong> dari <strong class="text-slate-800 dark:text-slate-200">{total}</strong> dokumen
+            </div>
+
+            <!-- Page Size Selector -->
+            <div class="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-3">
+              <span>Baris:</span>
+              <select
+                bind:value={pageSize}
+                onchange={() => { page = 1; fetchLetters(); }}
+                class="px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer focus:outline-hidden"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
           </div>
-          <div class="flex items-center gap-1">
-            <button
-              disabled={page <= 1}
-              onclick={() => { page -= 1; fetchLetters(); }}
-              class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            >
-              <ChevronLeft class="w-4 h-4" />
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onclick={() => { page += 1; fetchLetters(); }}
-              class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            >
-              <ChevronRight class="w-4 h-4" />
-            </button>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Navigation Buttons: Jump to First, Prev, Next, Jump to End -->
+            <div class="flex items-center gap-1">
+              <!-- Jump to First -->
+              <button
+                type="button"
+                disabled={page <= 1}
+                onclick={() => handleJumpPage(1)}
+                title="Lompat ke Halaman Pertama (Awal)"
+                class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <ChevronFirst class="w-4 h-4" />
+                <span class="text-[11px] font-medium hidden md:inline">Awal</span>
+              </button>
+
+              <!-- Prev Page -->
+              <button
+                type="button"
+                disabled={page <= 1}
+                onclick={() => handleJumpPage(page - 1)}
+                title="Halaman Sebelumnya"
+                class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+              >
+                <ChevronLeft class="w-4 h-4" />
+              </button>
+
+              <!-- Page indicator & direct jump input -->
+              <div class="flex items-center gap-1.5 px-2 font-medium">
+                <span>Hal</span>
+                <input
+                  type="number"
+                  min="1"
+                  max={totalPages}
+                  bind:value={jumpPage}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') handleJumpPage(Number(jumpPage));
+                  }}
+                  onblur={() => handleJumpPage(Number(jumpPage))}
+                  class="w-12 px-1.5 py-1 text-center font-bold font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-red-500/30 outline-hidden"
+                />
+                <span>dari <strong class="text-slate-800 dark:text-slate-200">{totalPages}</strong></span>
+              </div>
+
+              <!-- Next Page -->
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onclick={() => handleJumpPage(page + 1)}
+                title="Halaman Selanjutnya"
+                class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+              >
+                <ChevronRight class="w-4 h-4" />
+              </button>
+
+              <!-- Jump to End -->
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onclick={() => handleJumpPage(totalPages)}
+                title="Lompat ke Halaman Terakhir (Akhir)"
+                class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <span class="text-[11px] font-medium hidden md:inline">Akhir</span>
+                <ChevronLast class="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       {/if}
