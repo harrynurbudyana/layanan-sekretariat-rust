@@ -318,15 +318,21 @@
     }
   }
 
+  let hasInitialLoaded = $state(false);
+
   $effect(() => {
-    if (admin.isAdmin && letters.length === 0 && !loading) {
+    if (admin.isAdmin && !hasInitialLoaded) {
+      hasInitialLoaded = true;
       fetchMetadata();
       fetchLetters();
+    } else if (!admin.isAdmin) {
+      hasInitialLoaded = false;
     }
   });
 
   onMount(() => {
-    if (admin.isAdmin) {
+    if (admin.isAdmin && !hasInitialLoaded) {
+      hasInitialLoaded = true;
       fetchMetadata();
       fetchLetters();
     }
@@ -853,8 +859,51 @@
           <span class="text-xs">Memuat agenda surat dari database...</span>
         </div>
       {:else if letters.length === 0}
-        <div class="py-16 text-center text-slate-400 text-xs">
-          Tidak ada surat yang ditemukan sesuai filter yang dipilih.
+        <div class="py-16 px-4 text-center max-w-md mx-auto space-y-3 animate-in fade-in duration-200">
+          <div class="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto shadow-inner">
+            {#if selectedLetterType === 'INCOMING'}
+              <Inbox class="w-7 h-7 text-emerald-500" />
+            {:else}
+              <Search class="w-7 h-7 text-slate-400" />
+            {/if}
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">
+              {#if selectedLetterType === 'INCOMING'}
+                Belum Ada Surat Masuk yang Dicatat
+              {:else if selectedLetterType === 'OUTGOING'}
+                Tidak Ada Surat Keluar Ditemukan
+              {:else}
+                Tidak Ada Agenda Surat yang Ditemukan
+              {/if}
+            </h3>
+            <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              {#if selectedLetterType === 'INCOMING'}
+                Buku agenda saat ini terisi data surat keluar resmi fakultas. Anda dapat mulai mencatat surat masuk dinas baru melalui tombol di bawah.
+              {:else}
+                Tidak ditemukan arsip surat yang sesuai dengan kata kunci atau filter saat ini.
+              {/if}
+            </p>
+          </div>
+          {#if selectedLetterType === 'INCOMING'}
+            <button
+              type="button"
+              onclick={openIncomingModal}
+              class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-700 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-red-500/20 transition-all cursor-pointer active:scale-95"
+            >
+              <Plus class="w-4 h-4" />
+              <span>Input Surat Masuk Sekarang</span>
+            </button>
+          {:else if activeFilterCount > 0}
+            <button
+              type="button"
+              onclick={resetAllFilters}
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
+            >
+              <RotateCcw class="w-3.5 h-3.5" />
+              <span>Reset Filter Pencarian</span>
+            </button>
+          {/if}
         </div>
       {:else}
         <div class="overflow-x-auto">

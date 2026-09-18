@@ -9,7 +9,7 @@ frontend/dist/
 
 # SQLite journals & backups
 *.db-journal
-*.bak
+*.bak*
 
 # Environment & Secrets
 .env
